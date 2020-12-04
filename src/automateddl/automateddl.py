@@ -53,7 +53,7 @@ class AutomatedDL:
                 print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Extract")
 
                 try:
-                    patoolib.extract_archive(downName, outdir=outDir)
+                    patoolib.extract_archive(str(downName), outdir=outDir)
                
                     print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Move")
                     self.Move(outDir, self.__endedpath)
