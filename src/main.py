@@ -13,7 +13,7 @@ aria2 = aria2p.API(
     )
 )
 
-autodl = automateddl.AutomatedDL(aria2, '/Download', '/Extract', '/Ended')
+autodl = automateddl.AutomatedDL(aria2, '/tmp/Download', '/tmp/Extract', '/tmp/Ended')
 
 def signal_handler(sig, frame):
     autodl.stop()
