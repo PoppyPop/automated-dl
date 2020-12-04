@@ -19,7 +19,7 @@
 				"docker-build"
 			],
 			"python": {
-				"file": "automateddl/main.py"
+				"file": "main.py"
 			}
 		}
 	]

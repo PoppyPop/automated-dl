@@ -152,9 +152,13 @@ class AutomatedDL:
     def start(self):
         self.__api.listen_to_notifications(
             threaded=True, on_download_complete=self.on_complete)
+        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " Starting listenning")
 
     def stop(self):
         self.__api.stop_listening()
+        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " Stop listenning")
 
         for th in self.__threadlist.values():
             th.join()
+
+        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " Stop thread")
