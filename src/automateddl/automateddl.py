@@ -150,6 +150,10 @@ class AutomatedDL:
         self.__extractpath = extractpath
         self.__endedpath = endedpath
 
+        pathlib.Path(downpath).mkdir(parents=True, exist_ok=True)
+        pathlib.Path(extractpath).mkdir(parents=True, exist_ok=True)
+        pathlib.Path(endedpath).mkdir(parents=True, exist_ok=True)
+
     def start(self):
         self.__api.listen_to_notifications(
             threaded=True, on_download_complete=self.on_complete)
