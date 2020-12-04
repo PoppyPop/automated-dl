@@ -37,7 +37,7 @@ class AutomatedDL:
         print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " " + gid + " HandleArchive")
 
         filename = path.name
-        downName = os.path.join(self.__downpath, filename)
+        downName = pathlib.Path(os.path.join(self.__downpath, filename))
         baseName = os.path.join(self.__extractpath, lockbase)
         outDir = pathlib.Path(baseName+self.outSuffix)
 
@@ -45,7 +45,7 @@ class AutomatedDL:
         
         lock = self.__lockbykey.getlock(lockbase)
 
-        if not lock.locked() and lock.acquire(timeout=0):
+        if not lock.locked() and lock.acquire(timeout=0) and downName.exists():
 
             try:
                 outDir.mkdir(parents=True, exist_ok=True)
@@ -55,6 +55,7 @@ class AutomatedDL:
                 try:
                     patoolib.extract_archive(downName, outdir=outDir)
                
+                    print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Move")
                     self.Move(outDir, self.__endedpath)
 
                     filetoremove = list(filter(lambda dir: dir.is_file() and dir.name.startswith(lockbase), 
