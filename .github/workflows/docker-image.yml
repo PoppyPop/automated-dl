@@ -34,7 +34,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: PoppyPop/automated-dl:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest
 
       -
         name: Image digest
