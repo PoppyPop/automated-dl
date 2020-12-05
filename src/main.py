@@ -7,7 +7,7 @@ import automateddl
 
 # Get Config fom environnement
 
-server = os.getenv('SERVER', 'http://aria2-pro')
+server = os.getenv('SERVER', 'http://127.0.0.1')
 port = os.getenv('PORT', '6800')
 secret = os.getenv('SECRET', '')
 
