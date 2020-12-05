@@ -15,6 +15,13 @@ downloaddir = os.getenv('DOWNLOADDIR', '/downloads')
 extractdir = os.getenv('EXRACTDIR', '/downloads/Extract')
 endeddir = os.getenv('ENDEDDIR', '/downloads/Ended')
 
+print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " Server: " + server)
+print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " Port: " + port)
+
+print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " downloaddir: " + downloaddir)
+print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " extractdir: " + extractdir)
+print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " endeddir: " + endeddir)
+
 aria2 = aria2p.API(
     aria2p.Client(
         host=server,
