@@ -45,7 +45,7 @@ class AutomatedDL:
         
         lock = self.__lockbykey.getlock(lockbase)
 
-        if not lock.locked() and lock.acquire(timeout=0) and downName.exists():
+        if not lock.locked() and lock.acquire(timeout=5) and downName.exists():
 
             try:
                 outDir.mkdir(parents=True, exist_ok=True)
