@@ -45,28 +45,33 @@ class AutomatedDL:
         
         lock = self.__lockbykey.getlock(lockbase)
 
-        if not lock.locked() and lock.acquire(timeout=5) and downName.exists():
+        if not lock.locked() and lock.acquire(timeout=5):
 
             try:
-                outDir.mkdir(parents=True, exist_ok=True)
+                if downName.exists():
 
-                print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Extract")
+                    outDir.mkdir(parents=True, exist_ok=True)
 
-                try:
-                    patoolib.extract_archive(str(downName), outdir=outDir)
-               
-                    print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Move")
-                    self.Move(outDir, self.__endedpath)
+                    print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Extract")
 
-                    filetoremove = list(filter(lambda dir: dir.is_file() and dir.name.startswith(lockbase), 
-                        pathlib.Path(self.__downpath).iterdir()))
+                    try:
+                        patoolib.extract_archive(str(downName), outdir=outDir)
+                
+                        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Move")
+                        self.Move(outDir, self.__endedpath)
 
-                    for file in filetoremove:
-                        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Clean " + file.name)
-                        os.remove(str(file))
+                        filetoremove = list(filter(lambda dir: dir.is_file() and dir.name.startswith(lockbase), 
+                            pathlib.Path(self.__downpath).iterdir()))
 
-                except patoolib.util.PatoolError as inst:
-                    print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Error " + str(inst))
+                        for file in filetoremove:
+                            print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Clean " + file.name)
+                            os.remove(str(file))
+
+                    except patoolib.util.PatoolError as inst:
+                        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Error " + str(inst))
+
+                else:
+                    print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Missing file")
 
 
             finally:
