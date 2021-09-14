@@ -39,7 +39,11 @@ class AutomatedDL:
         filename = path.name
         downName = pathlib.Path(os.path.join(self.__downpath, filename))
         baseName = os.path.join(self.__extractpath, lockbase)
-        outDir = pathlib.Path(baseName+self.outSuffix)
+        
+        keepcharacters = ('.','_')
+        safeBaseName = baseName.join(c for c in filename if c.isalnum() or c in keepcharacters).rstrip()
+        
+        outDir = pathlib.Path(safeBaseName+self.outSuffix)
 
         print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Acquitre Lock " + lockbase)
         
