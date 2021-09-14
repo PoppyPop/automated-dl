@@ -38,16 +38,17 @@ class AutomatedDL:
 
         filename = path.name
         downName = pathlib.Path(os.path.join(self.__downpath, filename))
-        baseName = os.path.join(self.__extractpath, lockbase)
         
         keepcharacters = ('.','_')
-        safeBaseName = "".join(c for c in baseName if c.isalnum() or c in keepcharacters).rstrip()
+        safeLockbase = "".join(c for c in lockbase if c.isalnum() or c in keepcharacters).rstrip()
         
-        outDir = pathlib.Path(safeBaseName+self.outSuffix)
+        baseName = os.path.join(self.__extractpath, safeLockbase)
 
-        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Acquitre Lock " + lockbase)
+        outDir = pathlib.Path(baseName+self.outSuffix)
+
+        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Acquitre Lock " + safeLockbase)
         
-        lock = self.__lockbykey.getlock(lockbase)
+        lock = self.__lockbykey.getlock(safeLockbase)
 
         if not lock.locked() and lock.acquire(timeout=5):
 
@@ -81,7 +82,7 @@ class AutomatedDL:
             finally:
                 print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " " + gid + " Lock Release")
                 lock.release()
-                self.__lockbykey.delete(lockbase)
+                self.__lockbykey.delete(safeLockbase)
 
 
         else:
