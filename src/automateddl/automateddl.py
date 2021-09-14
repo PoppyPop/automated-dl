@@ -41,7 +41,7 @@ class AutomatedDL:
         baseName = os.path.join(self.__extractpath, lockbase)
         
         keepcharacters = ('.','_')
-        safeBaseName = baseName.join(c for c in filename if c.isalnum() or c in keepcharacters).rstrip()
+        safeBaseName = "".join(c for c in baseName if c.isalnum() or c in keepcharacters).rstrip()
         
         outDir = pathlib.Path(safeBaseName+self.outSuffix)
 
