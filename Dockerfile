@@ -1,5 +1,5 @@
 # For more information, please refer to https://aka.ms/vscode-docker-python
-FROM python:alpine
+FROM python:alpine3.14
 #FROM python:slim
 
 # Keeps Python from generating .pyc files in the container
