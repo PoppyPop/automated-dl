@@ -35,9 +35,6 @@ class AutomatedDL:
     def HandleArchive(self, gid:str, path: pathlib.Path, lockbase: str):
 
         print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " " + gid + " HandleArchive")
-
-        filename = path.name
-        downName = pathlib.Path(os.path.join(self.__downpath, filename))
         
         keepcharacters = ('.','_')
         safeLockbase = "".join(c for c in lockbase if c.isalnum() or c in keepcharacters).rstrip()
@@ -53,14 +50,14 @@ class AutomatedDL:
         if not lock.locked() and lock.acquire(timeout=5):
 
             try:
-                if downName.exists():
+                if path.exists():
 
                     outDir.mkdir(parents=True, exist_ok=True)
 
                     print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Extract")
 
                     try:
-                        patoolib.extract_archive(str(downName), outdir=outDir)
+                        patoolib.extract_archive(str(path), outdir=outDir)
                 
                         print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Move")
                         self.Move(outDir, self.__endedpath)
@@ -116,6 +113,8 @@ class AutomatedDL:
 
     def HandleDownload(self, api: aria2p.API, dl: aria2p.Download, path: pathlib.Path):
 
+        path = pathlib.Path(os.path.join(self.__downpath, path.name))
+        
         archiveExt = ['.zip', '.rar']
 
         _, file_extension = os.path.splitext(path)
