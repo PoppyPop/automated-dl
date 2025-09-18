@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Install system requirement
-RUN apk add --no-cache -u p7zip unrar file
+RUN apk add --no-cache -u p7zip file
 #RUN apt-get update && apt-get install p7zip unrar
 
 # Install pip requirements
@@ -30,4 +30,5 @@ USER appuser
 
 # During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
 CMD ["python", "main.py"]
+
 
