@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.responses import FileResponse
-#from fastapi.staticfiles import StaticFiles
+# from fastapi.staticfiles import StaticFiles
 
 from . import STATIC_DIR
 import os
@@ -14,11 +14,11 @@ def translate_size(size):
         pass
     size = size.lower()
     if size.endswith("k"):
-        multiplier = 2 ** 10
+        multiplier = 2**10
     elif size.endswith("m"):
-        multiplier = 2 ** 20
+        multiplier = 2**20
     elif size.endswith("g"):
-        multiplier = 2 ** 30
+        multiplier = 2**30
     else:
         raise ValueError("size unit not supported:", size)
     return int(size.rstrip("kmg")) * multiplier
@@ -32,7 +32,8 @@ async def virtual_file(size, chunks=4096):
 
 app = FastAPI()
 
-#app.mount("/static", StaticFiles(directory='./' + str(STATIC_DIR)), name="static")
+# app.mount("/static", StaticFiles(directory='./' + str(STATIC_DIR)), name="static")
+
 
 @app.get("/static/{filename}")
 async def static(filename):
@@ -42,6 +43,7 @@ async def static(filename):
         virtual_file(translate_size(10)),
         media_type="application/octet-stream",
     )
+
 
 @app.get("/{size}")
 async def get(size):

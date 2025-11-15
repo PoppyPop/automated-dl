@@ -14,10 +14,11 @@ import requests
 from aria2p import API, Client, enable_logger
 
 from . import CONFIGS_DIR, SESSIONS_DIR
+from typing import List
 
 
 @pytest.fixture(autouse=True)
-def tests_logs(request):
+def tests_logs(request: pytest.FixtureRequest):
     # put logs in tests/logs
     log_path = Path("tests") / "logs"
 
@@ -40,7 +41,7 @@ def tests_logs(request):
     enable_logger(sink=log_path, level=os.environ.get("PYTEST_LOG_LEVEL", "TRACE"))
 
 
-def spawn_and_wait_server(port=8779):
+def spawn_and_wait_server(port: int = 8779) -> subprocess.Popen:
     process = subprocess.Popen(
         [
             sys.executable,
@@ -56,7 +57,7 @@ def spawn_and_wait_server(port=8779):
     while True:
         try:
             requests.get(f"http://localhost:{port}/1024")
-        except:
+        except Exception:
             time.sleep(0.1)
         else:
             break
@@ -64,7 +65,7 @@ def spawn_and_wait_server(port=8779):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def http_server(tmp_path_factory, worker_id):
+def http_server(tmp_path_factory: pytest.TempPathFactory, worker_id):
     if worker_id == "master":
         # single worker: just run the HTTP server
         process = spawn_and_wait_server()
@@ -154,7 +155,7 @@ class _Aria2Server:
                 break
 
     def wait(self):
-        while True:
+        while self.process is not None:
             try:
                 self.process.wait()
             except subprocess.TimeoutExpired:
@@ -163,12 +164,14 @@ class _Aria2Server:
                 break
 
     def terminate(self):
-        self.process.terminate()
-        self.wait()
+        if self.process is not None:
+            self.process.terminate()
+            self.wait()
 
     def kill(self):
-        self.process.kill()
-        self.wait()
+        if self.process is not None:
+            self.process.kill()
+            self.wait()
 
     def rmdir(self, directory=None):
         if directory is None:
@@ -203,7 +206,7 @@ class Aria2Server:
 ports_file = Path(".ports.json")
 
 
-def get_lock():
+def get_lock() -> None:
     lockdir = Path(".lockdir")
     while True:
         try:
@@ -214,26 +217,26 @@ def get_lock():
             break
 
 
-def release_lock():
+def release_lock() -> None:
     Path(".lockdir").rmdir()
 
 
-def get_random_port():
+def get_random_port() -> int:
     return random.randint(15000, 16000)
 
 
-def get_current_ports():
+def get_current_ports() -> List[int]:
     try:
         return json.loads(ports_file.read_text())
     except FileNotFoundError:
         return []
 
 
-def set_current_ports(ports):
+def set_current_ports(ports: List[int]) -> None:
     ports_file.write_text(json.dumps(ports))
 
 
-def reserve_port():
+def reserve_port() -> int:
     get_lock()
 
     ports = get_current_ports()
@@ -247,7 +250,7 @@ def reserve_port():
     return port_number
 
 
-def release_port(port_number):
+def release_port(port_number: int) -> None:
     get_lock()
     ports = get_current_ports()
     ports.remove(port_number)
@@ -256,13 +259,13 @@ def release_port(port_number):
 
 
 @pytest.fixture
-def port():
+def port() -> int:
     port_number = reserve_port()
     yield port_number
     release_port(port_number)
 
 
 @pytest.fixture
-def server(tmp_path, port):
+def server(tmp_path: Path, port: int):
     with Aria2Server(tmp_path, port) as server:
         yield server

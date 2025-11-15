@@ -2,3 +2,5 @@ uvicorn
 pytest-xdist
 fastapi
 aiofiles
+pre-commit
+ruff

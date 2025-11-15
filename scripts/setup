@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+python3 -m pip install --upgrade pip
+
+python3 -m pip install --requirement requirements.txt
+
+python3 -m pip install --requirement requirements-dev.txt
+
+#python3 -m pip install --requirement .github/workflows/constraints.txt
+
+# Activate non-free and contrib components in APT sources
+FILES="/etc/apt/sources.list.d/*.sources /etc/apt/sources.sources"
+
+# Desired components
+NEW_LINE="Components: main contrib non-free"
+
+for f in $FILES; do
+    [ -f "$f" ] || continue
+
+    # Replace any Components: line with the new one
+    sudo sed -i -E "s/^Components:.*/$NEW_LINE/" "$f"
+done
+
+sudo apt-get update
+
+sudo apt-get install -y file unrar aria2 p7zip-full unzip jq
+
+pre-commit install

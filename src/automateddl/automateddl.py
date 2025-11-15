@@ -6,25 +6,27 @@ import shutil
 import re
 import datetime
 import threading
+from typing import Dict, List
 
 from .lockbykey import LockByKey
 
+
 class AutomatedDL:
-    __api = aria2p.API
+    __api: aria2p.API
 
-    __extractpath = str
-    __endedpath = str
-    __downpath = str
+    __extractpath: str
+    __endedpath: str
+    __downpath: str
 
-    __threadlist = {}
+    __threadlist: Dict[str, threading.Thread] = {}
 
-    __lockbykey = LockByKey()
+    __lockbykey: LockByKey = LockByKey()
 
-    #__lock = threading.Lock()
+    # __lock = threading.Lock()
 
-    outSuffix = '-OUT'
+    outSuffix: str = "-OUT"
 
-    def Move(self, path: pathlib.Path, dest: str):
+    def Move(self, path: pathlib.Path, dest: str) -> None:
         to_directory = pathlib.Path(dest)
 
         # raises FileExistsError when target is already a file
@@ -32,90 +34,149 @@ class AutomatedDL:
 
         shutil.move(str(path), str(to_directory))
 
-    def HandleArchive(self, gid:str, path: pathlib.Path, lockbase: str):
+    def HandleArchive(self, gid: str, path: pathlib.Path, lockbase: str) -> None:
+        print(
+            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+            + " "
+            + gid
+            + " HandleArchive"
+        )
 
-        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " " + gid + " HandleArchive")
-        
-        keepcharacters = ('.','_')
-        safeLockbase = "".join(c for c in lockbase if c.isalnum() or c in keepcharacters).rstrip()
-        
+        keepcharacters = (".", "_")
+        safeLockbase = "".join(
+            c for c in lockbase if c.isalnum() or c in keepcharacters
+        ).rstrip()
+
         baseName = os.path.join(self.__extractpath, safeLockbase)
 
-        outDir = pathlib.Path(baseName+self.outSuffix)
+        outDir = pathlib.Path(baseName + self.outSuffix)
 
-        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Acquitre Lock " + safeLockbase)
-        
+        print(
+            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+            + " "
+            + gid
+            + " Acquitre Lock "
+            + safeLockbase
+        )
+
         lock = self.__lockbykey.getlock(safeLockbase)
 
         if not lock.locked() and lock.acquire(timeout=5):
-
             try:
                 if path.exists():
-
                     outDir.mkdir(parents=True, exist_ok=True)
 
-                    print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Extract")
+                    print(
+                        datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+                        + " "
+                        + gid
+                        + " Extract"
+                    )
 
                     try:
-                        patoolib.extract_archive(str(path), outdir=outDir)
-                
-                        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Move")
+                        patoolib.extract_archive(str(path), outdir=outDir.as_posix())
+
+                        print(
+                            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+                            + " "
+                            + gid
+                            + " Move"
+                        )
                         self.Move(outDir, self.__endedpath)
 
-                        filetoremove = list(filter(lambda dir: dir.is_file() and dir.name.startswith(lockbase), 
-                            pathlib.Path(self.__downpath).iterdir()))
+                        filetoremove = list(
+                            filter(
+                                lambda dir: dir.is_file()
+                                and dir.name.startswith(lockbase),
+                                pathlib.Path(self.__downpath).iterdir(),
+                            )
+                        )
 
                         for file in filetoremove:
-                            print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Clean " + file.name)
+                            print(
+                                datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+                                + " "
+                                + gid
+                                + " Clean "
+                                + file.name
+                            )
                             os.remove(str(file))
 
                     except patoolib.util.PatoolError as inst:
-                        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Error " + str(inst))
+                        print(
+                            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+                            + " "
+                            + gid
+                            + " Error "
+                            + str(inst)
+                        )
 
                 else:
-                    print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") +  " " + gid + " Missing file")
-
+                    print(
+                        datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+                        + " "
+                        + gid
+                        + " Missing file"
+                    )
 
             finally:
-                print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " " + gid + " Lock Release")
+                print(
+                    datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+                    + " "
+                    + gid
+                    + " Lock Release"
+                )
                 lock.release()
                 self.__lockbykey.delete(safeLockbase)
 
-
         else:
-            print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " " + gid + " Already Locked")
+            print(
+                datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+                + " "
+                + gid
+                + " Already Locked"
+            )
 
-    def HandleMultiPart(self, gid:str, api: aria2p.API, path: pathlib.Path, ext: str):
-        multipartRegEx = [r'^(?P<filename>.+)\.part(?P<number>\d+)\.']
-        doExtract = False
-        isMatched = False
-        filename = path.name
+    def HandleMultiPart(
+        self, gid: str, api: aria2p.API, path: pathlib.Path, ext: str
+    ) -> None:
+        multipartRegEx: List[str] = [r"^(?P<filename>.+)\.part(?P<number>\d+)\."]
+        doExtract: bool = False
+        isMatched: bool = False
+        filename: str = path.name
 
         for regex in multipartRegEx:
-            m = re.match(regex + ext[1:] + '$', filename)
+            m = re.match(regex + ext[1:] + "$", filename)
 
-            if (m != None):
+            if m is not None:
                 isMatched = True
-                groupNumber = m.group('number')
+                groupNumber = m.group("number")
                 if groupNumber.isnumeric:
                     dls = api.get_downloads()
 
                     filterdDls = list(
-                        filter(lambda download: download.name.startswith(m.group('filename')), dls))
+                        filter(
+                            lambda download: download.name.startswith(
+                                m.group("filename")
+                            ),
+                            dls,
+                        )
+                    )
 
                     if all(e.is_complete for e in filterdDls):
                         doExtract = True
-                        filename = m.group('filename')
+                        filename = m.group("filename")
                         break  # We have all the necessary data
 
         if not isMatched or doExtract:
             self.HandleArchive(gid, path, filename)
 
-    def HandleDownload(self, api: aria2p.API, dl: aria2p.Download, path: pathlib.Path):
-
+    def HandleDownload(
+        self, api: aria2p.API, dl: aria2p.Download, path: pathlib.Path
+    ) -> None:
         path = pathlib.Path(os.path.join(self.__downpath, path.name))
-        
-        archiveExt = ['.zip', '.rar']
+
+        archiveExt: List[str] = [".zip", ".rar"]
 
         _, file_extension = os.path.splitext(path)
         if file_extension == ".nfo":
@@ -131,29 +192,40 @@ class AutomatedDL:
             self.Move(path, self.__endedpath)
             api.remove(downloads=[dl], clean=True)
 
-    def on_complete_thread(self, api: aria2p.API, gid: str):
-        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " " + gid + " OnComplete")
+    def on_complete_thread(self, api: aria2p.API, gid: str) -> None:
+        print(
+            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+            + " "
+            + gid
+            + " OnComplete"
+        )
 
         dl = api.get_download(gid)
 
         for file in dl.files:
             self.HandleDownload(api, dl, file.path)
 
-        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " " + gid + " Complete")
+        print(
+            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+            + " "
+            + gid
+            + " Complete"
+        )
 
-
-    def on_complete(self, api: aria2p.API, gid: str):
-
+    def on_complete(self, api: aria2p.API, gid: str) -> None:
         kwargs = {
             "api": api,
             "gid": gid,
         }
 
-        self.__threadlist[gid] = threading.Thread(target=self.on_complete_thread, kwargs=kwargs)
+        self.__threadlist[gid] = threading.Thread(
+            target=self.on_complete_thread, kwargs=kwargs
+        )
         self.__threadlist[gid].start()
 
-
-    def __init__(self, api: aria2p.API, downpath: str, extractpath: str, endedpath: str):
+    def __init__(
+        self, api: aria2p.API, downpath: str, extractpath: str, endedpath: str
+    ) -> None:
         self.__api = api
         self.__downpath = downpath
         self.__extractpath = extractpath
@@ -163,14 +235,21 @@ class AutomatedDL:
         pathlib.Path(extractpath).mkdir(parents=True, exist_ok=True)
         pathlib.Path(endedpath).mkdir(parents=True, exist_ok=True)
 
-    def start(self):
+    def start(self) -> None:
         self.__api.listen_to_notifications(
-            threaded=True, on_download_complete=self.on_complete)
-        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " Starting listenning")
+            threaded=True, on_download_complete=self.on_complete
+        )
+        print(
+            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+            + " Starting listenning"
+        )
 
-    def stop(self):
+    def stop(self) -> None:
         self.__api.stop_listening()
-        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " Stop listenning")
+        print(
+            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
+            + " Stop listenning"
+        )
 
         for th in self.__threadlist.values():
             th.join()
