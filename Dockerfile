@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 # Turns off buffering for easier container logging
 ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
 
 # Install system requirement
 RUN apk add --no-cache -u p7zip file curl jq

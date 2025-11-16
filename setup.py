@@ -35,7 +35,7 @@ setup(
     description="Aria2c companion that decompress archive on download complete",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    install_requires=["aria2p", "patool"],
+    install_requires=["aria2p", "patool", "httpx"],
     license="GPL-3",
     include_package_data=True,
     url="https://github.com/PoppyPop/automated-dl",

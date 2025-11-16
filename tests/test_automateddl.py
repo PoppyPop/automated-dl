@@ -11,7 +11,8 @@ from .conftest import Aria2Server
 from src.automateddl import AutomatedDL
 
 
-def test_nfo_dl(tmp_path, port, capsys):
+def test_nfo_dl(tmp_path, port, caplog):
+    caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="very-small-download-nfo.txt") as server:
         extractPath = os.path.join(tmp_path, "Extract")
         endedPath = os.path.join(tmp_path, "Ended")
@@ -35,10 +36,11 @@ def test_nfo_dl(tmp_path, port, capsys):
         assert not target.exists()
         assert len(download) == 0
 
-        assert "0000000000000001 Complete" in capsys.readouterr().out
+        assert "0000000000000001 Complete" in caplog.text
 
 
-def test_txt_dl(tmp_path, port, capsys):
+def test_txt_dl(tmp_path, port, caplog):
+    caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="very-small-download.txt") as server:
         extractPath = os.path.join(tmp_path, "Extract")
         endedPath = os.path.join(tmp_path, "Ended")
@@ -63,10 +65,11 @@ def test_txt_dl(tmp_path, port, capsys):
         assert target.exists()
         assert len(download) == 0
 
-        assert "0000000000000001 Complete" in capsys.readouterr().out
+        assert "0000000000000001 Complete" in caplog.text
 
 
-def test_zip_dl(tmp_path, port, capsys):
+def test_zip_dl(tmp_path, port, caplog):
+    caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="zip.txt") as server:
         extractPath = os.path.join(tmp_path, "Extract")
         endedPath = os.path.join(tmp_path, "Ended")
@@ -107,10 +110,11 @@ def test_zip_dl(tmp_path, port, capsys):
 
         assert len(download) == 0  # No remaining download
 
-        assert "0000000000000001 Complete" in capsys.readouterr().out
+        assert "0000000000000001 Complete" in caplog.text
 
 
-def test_rar_dl(tmp_path, port, capsys):
+def test_rar_dl(tmp_path, port, caplog):
+    caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="rar.txt") as server:
         extractPath = os.path.join(tmp_path, "Extract")
         endedPath = os.path.join(tmp_path, "Ended")
@@ -151,10 +155,11 @@ def test_rar_dl(tmp_path, port, capsys):
 
         assert len(download) == 0  # No remaining download
 
-        assert "0000000000000001 Complete" in capsys.readouterr().out
+        assert "0000000000000001 Complete" in caplog.text
 
 
-def test_multi_dl(tmp_path, port, capsys):
+def test_multi_dl(tmp_path, port, caplog):
+    caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="multi-rar.txt") as server:
         extractPath = os.path.join(tmp_path, "Extract")
         endedPath = os.path.join(tmp_path, "Ended")
@@ -206,15 +211,14 @@ def test_multi_dl(tmp_path, port, capsys):
 
         assert len(download) == 0  # No remaining download
 
-        outvalue = capsys.readouterr().out
-
-        assert "0000000000000001 Complete" in outvalue
-        assert "0000000000000002 Complete" in outvalue
-        assert "0000000000000003 Complete" in outvalue
-        assert "0000000000000004 Complete" in outvalue
+        assert "0000000000000001 Complete" in caplog.text
+        assert "0000000000000002 Complete" in caplog.text
+        assert "0000000000000003 Complete" in caplog.text
+        assert "0000000000000004 Complete" in caplog.text
 
 
-def test_missing_dl(tmp_path, port, capsys):
+def test_missing_dl(tmp_path, port, caplog):
+    caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="multi-rar-missing.txt") as server:
         extractPath = os.path.join(tmp_path, "Extract")
         endedPath = os.path.join(tmp_path, "Ended")
@@ -260,13 +264,12 @@ def test_missing_dl(tmp_path, port, capsys):
 
         assert len(download) == 0  # No remaining download
 
-        outvalue = capsys.readouterr().out
-
-        assert "0000000000000001 Complete" in outvalue
-        assert "0000000000000003 Complete" in outvalue
+        assert "0000000000000001 Complete" in caplog.text
+        assert "0000000000000003 Complete" in caplog.text
 
 
-def test_all_dl(tmp_path, port, capsys):
+def test_all_dl(tmp_path, port, caplog):
+    caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="all.txt") as server:
         extractPath = os.path.join(tmp_path, "Extract")
         endedPath = os.path.join(tmp_path, "Ended")
@@ -346,12 +349,10 @@ def test_all_dl(tmp_path, port, capsys):
 
         assert len(download) == 0  # No remaining download
 
-        outvalue = capsys.readouterr().out
-
-        assert "0000000000000001 Complete" in outvalue
-        assert "0000000000000002 Complete" in outvalue
-        assert "0000000000000003 Complete" in outvalue
-        assert "0000000000000004 Complete" in outvalue
-        assert "0000000000000005 Complete" in outvalue
-        assert "0000000000000006 Complete" in outvalue
-        assert "0000000000000007 Complete" in outvalue
+        assert "0000000000000001 Complete" in caplog.text
+        assert "0000000000000002 Complete" in caplog.text
+        assert "0000000000000003 Complete" in caplog.text
+        assert "0000000000000004 Complete" in caplog.text
+        assert "0000000000000005 Complete" in caplog.text
+        assert "0000000000000006 Complete" in caplog.text
+        assert "0000000000000007 Complete" in caplog.text

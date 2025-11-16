@@ -6,6 +6,7 @@ import random
 import subprocess
 import sys
 import time
+import logging
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,17 @@ from aria2p import API, Client, enable_logger
 
 from . import CONFIGS_DIR, SESSIONS_DIR
 from typing import List
+
+
+@pytest.fixture(autouse=True)
+def setup_logging():
+    """Configure logging for tests."""
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    yield
+    # Reset logging after each test
 
 
 @pytest.fixture(autouse=True)

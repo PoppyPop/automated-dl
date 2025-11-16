@@ -4,11 +4,14 @@ import pathlib
 import patoolib
 import shutil
 import re
-import datetime
+import logging
 import threading
+import httpx
 from typing import Dict, List
 
 from .lockbykey import LockByKey
+
+logger = logging.getLogger(__name__)
 
 
 class AutomatedDL:
@@ -35,12 +38,7 @@ class AutomatedDL:
         shutil.move(str(path), str(to_directory))
 
     def HandleArchive(self, gid: str, path: pathlib.Path, lockbase: str) -> None:
-        print(
-            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-            + " "
-            + gid
-            + " HandleArchive"
-        )
+        logger.info(f"{gid} HandleArchive")
 
         keepcharacters = (".", "_")
         safeLockbase = "".join(
@@ -51,13 +49,7 @@ class AutomatedDL:
 
         outDir = pathlib.Path(baseName + self.outSuffix)
 
-        print(
-            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-            + " "
-            + gid
-            + " Acquitre Lock "
-            + safeLockbase
-        )
+        logger.info(f"{gid} Acquire Lock {safeLockbase}")
 
         lock = self.__lockbykey.getlock(safeLockbase)
 
@@ -66,22 +58,12 @@ class AutomatedDL:
                 if path.exists():
                     outDir.mkdir(parents=True, exist_ok=True)
 
-                    print(
-                        datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-                        + " "
-                        + gid
-                        + " Extract"
-                    )
+                    logger.info(f"{gid} Extract")
 
                     try:
                         patoolib.extract_archive(str(path), outdir=outDir.as_posix())
 
-                        print(
-                            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-                            + " "
-                            + gid
-                            + " Move"
-                        )
+                        logger.info(f"{gid} Move")
                         self.Move(outDir, self.__endedpath)
 
                         filetoremove = list(
@@ -93,49 +75,22 @@ class AutomatedDL:
                         )
 
                         for file in filetoremove:
-                            print(
-                                datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-                                + " "
-                                + gid
-                                + " Clean "
-                                + file.name
-                            )
+                            logger.info(f"{gid} Clean {file.name}")
                             os.remove(str(file))
 
                     except patoolib.util.PatoolError as inst:
-                        print(
-                            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-                            + " "
-                            + gid
-                            + " Error "
-                            + str(inst)
-                        )
+                        logger.error(f"{gid} Error {str(inst)}")
 
                 else:
-                    print(
-                        datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-                        + " "
-                        + gid
-                        + " Missing file"
-                    )
+                    logger.warning(f"{gid} Missing file")
 
             finally:
-                print(
-                    datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-                    + " "
-                    + gid
-                    + " Lock Release"
-                )
+                logger.info(f"{gid} Lock Release")
                 lock.release()
                 self.__lockbykey.delete(safeLockbase)
 
         else:
-            print(
-                datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-                + " "
-                + gid
-                + " Already Locked"
-            )
+            logger.warning(f"{gid} Already Locked")
 
     def HandleMultiPart(
         self, gid: str, api: aria2p.API, path: pathlib.Path, ext: str
@@ -192,25 +147,22 @@ class AutomatedDL:
             self.Move(path, self.__endedpath)
             api.remove(downloads=[dl], clean=True)
 
+            # Trigger Sonarr/Radarr scan if it's a media file
+            if self._is_media_file(path.name):
+                if self._is_episode(path.name):
+                    self._trigger_sonarr_scan(self.__endedpath)
+                else:
+                    self._trigger_radarr_scan(self.__endedpath)
+
     def on_complete_thread(self, api: aria2p.API, gid: str) -> None:
-        print(
-            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-            + " "
-            + gid
-            + " OnComplete"
-        )
+        logger.info(f"{gid} OnComplete")
 
         dl = api.get_download(gid)
 
         for file in dl.files:
             self.HandleDownload(api, dl, file.path)
 
-        print(
-            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-            + " "
-            + gid
-            + " Complete"
-        )
+        logger.info(f"{gid} Complete")
 
     def on_complete(self, api: aria2p.API, gid: str) -> None:
         kwargs = {
@@ -224,34 +176,121 @@ class AutomatedDL:
         self.__threadlist[gid].start()
 
     def __init__(
-        self, api: aria2p.API, downpath: str, extractpath: str, endedpath: str
+        self,
+        api: aria2p.API,
+        downpath: str,
+        extractpath: str,
+        endedpath: str,
+        sonarr_url: str = "",
+        sonarr_api_key: str = "",
+        radarr_url: str = "",
+        radarr_api_key: str = "",
     ) -> None:
         self.__api = api
         self.__downpath = downpath
         self.__extractpath = extractpath
         self.__endedpath = endedpath
+        self.__sonarr_url = sonarr_url
+        self.__sonarr_api_key = sonarr_api_key
+        self.__radarr_url = radarr_url
+        self.__radarr_api_key = radarr_api_key
 
         pathlib.Path(downpath).mkdir(parents=True, exist_ok=True)
         pathlib.Path(extractpath).mkdir(parents=True, exist_ok=True)
         pathlib.Path(endedpath).mkdir(parents=True, exist_ok=True)
 
+    def _is_media_file(self, filename: str) -> bool:
+        """Check if the file is a media (video) file."""
+        media_extensions = [
+            ".mkv",
+            ".mp4",
+            ".avi",
+            ".mov",
+            ".flv",
+            ".wmv",
+            ".webm",
+            ".m4v",
+            ".mpg",
+            ".mpeg",
+            ".3gp",
+            ".ogv",
+        ]
+        _, ext = os.path.splitext(filename)
+        return ext.lower() in media_extensions
+
+    def _is_episode(self, filename: str) -> bool:
+        """
+        Detect if the media file is an episode or a movie.
+        Returns True for episodes, False for movies.
+        """
+        # Remove extension
+        name_without_ext = os.path.splitext(filename)[0]
+
+        # Pattern for Season/Episode: S01E01, s01e01, 1x01, etc.
+        episode_patterns = [
+            r"[Ss]\d{1,2}[Ee]\d{1,2}",  # S01E01, s01e01
+            r"\d{1,2}x\d{1,2}",  # 1x01
+        ]
+
+        for pattern in episode_patterns:
+            if re.search(pattern, name_without_ext):
+                return True
+
+        return False
+
+    def _trigger_sonarr_scan(self, directory: str) -> None:
+        """Trigger Sonarr DownloadedEpisodesScan API."""
+        if not self.__sonarr_url or not self.__sonarr_api_key:
+            logger.debug("Sonarr not configured, skipping scan")
+            return
+
+        try:
+            url = f"{self.__sonarr_url}/api/v3/command"
+            headers = {"X-Api-Key": self.__sonarr_api_key}
+            payload = {
+                "name": "DownloadedEpisodesScan",
+                "path": directory,
+            }
+
+            response = httpx.post(url, json=payload, headers=headers, timeout=10)
+            response.raise_for_status()
+
+            logger.info(f"Sonarr scan triggered for {directory}")
+        except Exception as e:
+            logger.error(f"Error triggering Sonarr scan: {str(e)}")
+
+    def _trigger_radarr_scan(self, directory: str) -> None:
+        """Trigger Radarr DownloadedMoviesScan API."""
+        if not self.__radarr_url or not self.__radarr_api_key:
+            logger.debug("Radarr not configured, skipping scan")
+            return
+
+        try:
+            url = f"{self.__radarr_url}/api/v3/command"
+            headers = {"X-Api-Key": self.__radarr_api_key}
+            payload = {
+                "name": "DownloadedMoviesScan",
+                "path": directory,
+            }
+
+            response = httpx.post(url, json=payload, headers=headers, timeout=10)
+            response.raise_for_status()
+
+            logger.info(f"Radarr scan triggered for {directory}")
+        except Exception as e:
+            logger.error(f"Error triggering Radarr scan: {str(e)}")
+
     def start(self) -> None:
         self.__api.listen_to_notifications(
             threaded=True, on_download_complete=self.on_complete
         )
-        print(
-            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-            + " Starting listenning"
-        )
+        logger.info("Starting listening")
 
     def stop(self) -> None:
         self.__api.stop_listening()
-        print(
-            datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f")
-            + " Stop listenning"
-        )
+        logger.info("Stop listening")
 
         for th in self.__threadlist.values():
             th.join()
 
-        print(datetime.datetime.now().strftime("%Y/%m/%dT%H:%M:%S.%f") + " Stop thread")
+        logger.info("Stop thread")

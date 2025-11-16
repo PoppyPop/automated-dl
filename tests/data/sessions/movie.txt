@@ -1,0 +1,4 @@
+http://localhost:8779/100
+ gid=0000000000000001
+ pause=true
+ out=100.mkv

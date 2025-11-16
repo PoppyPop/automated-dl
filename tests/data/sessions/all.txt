@@ -20,3 +20,11 @@ http://localhost:8779/100
  gid=0000000000000007
  pause=true
  out=100.txt
+http://localhost:8779/100
+ gid=0000000000000008
+ pause=true
+ out=100.mkv
+http://localhost:8779/100
+ gid=0000000000000009
+ pause=true
+ out=100_S01E02.mkv
