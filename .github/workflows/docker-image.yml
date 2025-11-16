@@ -48,15 +48,28 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Extract Docker tags
+        id: extract_tags
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          # Remove leading 'v' if present for numeric tags
+          BASE_TAG=${TAG_NAME#v}
+          # Get major, major.minor, and full
+          MAJOR=$(echo "$BASE_TAG" | cut -d. -f1)
+          MINOR=$(echo "$BASE_TAG" | cut -d. -f2)
+          if [ -n "$MINOR" ]; then
+            MAJOR_MINOR="$MAJOR.$MINOR"
+          else
+            MAJOR_MINOR="$MAJOR"
+          fi
+          echo "DOCKER_TAGS=${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${TAG_NAME},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR_MINOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest" >> $GITHUB_ENV
+
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v6
         with:
           push: true
-          # Tag the image with the pushed git tag name and also push 'latest'
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${{ github.ref_name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest
+          tags: ${{ env.DOCKER_TAGS }}
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
