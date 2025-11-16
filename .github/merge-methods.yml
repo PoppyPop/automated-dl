@@ -1,0 +1,9 @@
+# Enforce rebase and merge only
+# This configuration disables squash and merge, and merge commits.
+# Place in .github/ to apply to the repository.
+
+pull_request:
+  merge_methods:
+    rebase: true
+    squash: false
+    merge: false
