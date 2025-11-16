@@ -2,7 +2,8 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [master]
+    # Only run this workflow when a tag is pushed
+    tags: ["*"]
   workflow_dispatch:
     inputs:
       logLevel:
@@ -52,7 +53,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest
+          # Tag the image with the pushed git tag name and also push 'latest'
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${{ github.ref_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
