@@ -29,5 +29,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt || true
+          sudo apt install unrar
       - name: Run tests
         run: pytest

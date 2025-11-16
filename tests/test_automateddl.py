@@ -21,8 +21,6 @@ def test_nfo_dl(tmp_path: Path, port: int, caplog: Any) -> None:
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
 
-        time.sleep(1)
-
         server.api.resume_all()
         time.sleep(1)
 
@@ -48,8 +46,6 @@ def test_txt_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
-
-        time.sleep(1)
 
         server.api.resume_all()
 
@@ -77,8 +73,6 @@ def test_zip_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
-
-        time.sleep(1)
 
         server.api.resume_all()
 
@@ -123,8 +117,6 @@ def test_rar_dl(tmp_path: Path, port: int, caplog: Any) -> None:
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
 
-        time.sleep(1)
-
         server.api.resume_all()
 
         time.sleep(1)
@@ -167,8 +159,6 @@ def test_multi_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
-
-        time.sleep(1)
 
         server.api.resume_all()
 
@@ -227,8 +217,6 @@ def test_missing_dl(tmp_path: Path, port: int, caplog: Any) -> None:
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
 
-        time.sleep(1)
-
         server.api.resume_all()
 
         time.sleep(1)
@@ -277,8 +265,6 @@ def test_all_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
-
-        time.sleep(1)
 
         server.api.resume_all()
 
