@@ -1,14 +1,12 @@
 """Configuration for the pytest test suite."""
 
-import json
 import os
-import random
 import subprocess
 import sys
 import time
 import logging
 from pathlib import Path
-from typing import List, Optional, Any, Generator
+from typing import Optional, Any, Generator
 
 import pytest
 import requests
@@ -229,89 +227,3 @@ class Aria2Server:
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self.server.destroy(force=True)
-
-    @staticmethod
-    def wait_for_downloads_complete(
-        api, timeout: float = 10.0, interval: float = 0.1
-    ) -> bool:
-        """Wait until `api.get_downloads()` returns empty or timeout is reached.
-
-        Returns True if downloads completed before timeout, False otherwise.
-        """
-        waited = 0.0
-        while waited < timeout:
-            downloads = api.get_downloads()
-            if not downloads:
-                return True
-            time.sleep(interval)
-            waited += interval
-        return False
-
-
-ports_file = Path(".ports.json")
-
-
-def get_lock() -> None:
-    lockdir = Path(".lockdir")
-    while True:
-        try:
-            lockdir.mkdir(exist_ok=False)
-        except FileExistsError:
-            time.sleep(0.025)
-        else:
-            break
-
-
-def release_lock() -> None:
-    Path(".lockdir").rmdir()
-
-
-def get_random_port() -> int:
-    return random.randint(15000, 16000)
-
-
-def get_current_ports() -> List[int]:
-    try:
-        ports: List[int] = json.loads(ports_file.read_text())
-        return ports
-    except FileNotFoundError:
-        return []
-
-
-def set_current_ports(ports: List[int]) -> None:
-    ports_file.write_text(json.dumps(ports))
-
-
-def reserve_port() -> int:
-    get_lock()
-
-    ports = get_current_ports()
-    port_number = get_random_port()
-    while port_number in ports:
-        port_number = get_random_port()
-    ports.append(port_number)
-    set_current_ports(ports)
-
-    release_lock()
-    return port_number
-
-
-def release_port(port_number: int) -> None:
-    get_lock()
-    ports = get_current_ports()
-    ports.remove(port_number)
-    set_current_ports(ports)
-    release_lock()
-
-
-@pytest.fixture
-def port() -> Generator[int, None, None]:
-    port_number = reserve_port()
-    yield port_number
-    release_port(port_number)
-
-
-@pytest.fixture
-def server(tmp_path: Path, port: int) -> Generator[_Aria2Server, None, None]:
-    with Aria2Server(tmp_path, port) as server:
-        yield server

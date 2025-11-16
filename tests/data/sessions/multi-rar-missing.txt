@@ -1,6 +1,0 @@
-http://localhost:8779/static/multi.part1.rar
- gid=0000000000000001
- pause=true
-http://localhost:8779/static/multi.part3.rar
- gid=0000000000000003
- pause=true
