@@ -10,6 +10,23 @@ from src.automateddl import AutomatedDL
 from .conftest import Aria2Server
 
 
+def wait_for_downloads_complete(
+    api, timeout: float = 10.0, interval: float = 0.1
+) -> bool:
+    """Wait until `api.get_downloads()` returns empty or timeout is reached.
+
+    Returns True if downloads completed before timeout, False otherwise.
+    """
+    waited = 0.0
+    while waited < timeout:
+        downloads = api.get_downloads()
+        if not downloads:
+            return True
+        time.sleep(interval)
+        waited += interval
+    return False
+
+
 class TestMediaDetection:
     """Test suite for media file detection."""
 
@@ -273,9 +290,9 @@ class TestIntegration:
             )
             autodl.start()
 
-            time.sleep(1)
             server.api.resume_all()
-            time.sleep(1)
+
+            wait_for_downloads_complete(server.api)
 
             autodl.stop()
 
@@ -317,9 +334,9 @@ class TestIntegration:
             )
             autodl.start()
 
-            time.sleep(1)
             server.api.resume_all()
-            time.sleep(1)
+
+            wait_for_downloads_complete(server.api)
 
             autodl.stop()
 
@@ -361,9 +378,9 @@ class TestIntegration:
             )
             autodl.start()
 
-            time.sleep(1)
             server.api.resume_all()
-            time.sleep(1)
+
+            wait_for_downloads_complete(server.api)
 
             autodl.stop()
 
