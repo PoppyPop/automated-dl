@@ -1,6 +1,5 @@
 """Tests for the `automateddl` module."""
 
-import time
 import os.path
 import pathlib
 from pathlib import Path
@@ -22,7 +21,8 @@ def test_nfo_dl(tmp_path: Path, port: int, caplog: Any) -> None:
         autodl.start()
 
         server.api.resume_all()
-        time.sleep(1)
+
+        Aria2Server.wait_for_downloads_complete(server.api)
 
         autodl.stop()
 
@@ -49,7 +49,7 @@ def test_txt_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         server.api.resume_all()
 
-        time.sleep(1)
+        Aria2Server.wait_for_downloads_complete(server.api)
 
         autodl.stop()
 
@@ -76,7 +76,7 @@ def test_zip_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         server.api.resume_all()
 
-        time.sleep(1)
+        Aria2Server.wait_for_downloads_complete(server.api)
 
         autodl.stop()
 
@@ -119,7 +119,7 @@ def test_rar_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         server.api.resume_all()
 
-        time.sleep(1)
+        Aria2Server.wait_for_downloads_complete(server.api)
 
         autodl.stop()
 
@@ -162,7 +162,7 @@ def test_multi_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         server.api.resume_all()
 
-        time.sleep(1)
+        Aria2Server.wait_for_downloads_complete(server.api)
 
         autodl.stop()
 
@@ -219,7 +219,7 @@ def test_missing_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         server.api.resume_all()
 
-        time.sleep(1)
+        Aria2Server.wait_for_downloads_complete(server.api)
 
         autodl.stop()
 
@@ -268,7 +268,7 @@ def test_all_dl(tmp_path: Path, port: int, caplog: Any) -> None:
 
         server.api.resume_all()
 
-        time.sleep(1)
+        Aria2Server.wait_for_downloads_complete(server.api)
 
         autodl.stop()
 

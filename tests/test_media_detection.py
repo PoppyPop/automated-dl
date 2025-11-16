@@ -2,29 +2,11 @@
 
 import os
 import pathlib
-import time
 from unittest.mock import Mock, patch, MagicMock
 from typing import Any
 
 from src.automateddl import AutomatedDL
 from .conftest import Aria2Server
-
-
-def wait_for_downloads_complete(
-    api, timeout: float = 10.0, interval: float = 0.1
-) -> bool:
-    """Wait until `api.get_downloads()` returns empty or timeout is reached.
-
-    Returns True if downloads completed before timeout, False otherwise.
-    """
-    waited = 0.0
-    while waited < timeout:
-        downloads = api.get_downloads()
-        if not downloads:
-            return True
-        time.sleep(interval)
-        waited += interval
-    return False
 
 
 class TestMediaDetection:
@@ -292,7 +274,7 @@ class TestIntegration:
 
             server.api.resume_all()
 
-            wait_for_downloads_complete(server.api)
+            Aria2Server.wait_for_downloads_complete(server.api)
 
             autodl.stop()
 
@@ -336,7 +318,7 @@ class TestIntegration:
 
             server.api.resume_all()
 
-            wait_for_downloads_complete(server.api)
+            Aria2Server.wait_for_downloads_complete(server.api)
 
             autodl.stop()
 
@@ -380,7 +362,7 @@ class TestIntegration:
 
             server.api.resume_all()
 
-            wait_for_downloads_complete(server.api)
+            Aria2Server.wait_for_downloads_complete(server.api)
 
             autodl.stop()
 

@@ -230,6 +230,23 @@ class Aria2Server:
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self.server.destroy(force=True)
 
+    @staticmethod
+    def wait_for_downloads_complete(
+        api, timeout: float = 10.0, interval: float = 0.1
+    ) -> bool:
+        """Wait until `api.get_downloads()` returns empty or timeout is reached.
+
+        Returns True if downloads completed before timeout, False otherwise.
+        """
+        waited = 0.0
+        while waited < timeout:
+            downloads = api.get_downloads()
+            if not downloads:
+                return True
+            time.sleep(interval)
+            waited += interval
+        return False
+
 
 ports_file = Path(".ports.json")
 
