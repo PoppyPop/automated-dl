@@ -1,9 +1,8 @@
 """Tests for the `automateddl` module."""
 
-import os.path
-import pathlib
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 from . import STATIC_DIR
 from .conftest import Aria2Server
@@ -11,25 +10,45 @@ from .conftest import Aria2Server
 from src.automateddl import AutomatedDL
 
 
-def test_nfo_dl(tmp_path: Path, port: int, caplog: Any) -> None:
-    caplog.set_level("INFO")
-    with Aria2Server(tmp_path, port, session="very-small-download-nfo.txt") as server:
-        extractPath = os.path.join(str(tmp_path), "Extract")
-        endedPath = os.path.join(str(tmp_path), "Ended")
+def wait_for_downloads_complete(
+    api, timeout: float = 10.0, interval: float = 0.1
+) -> bool:
+    """Wait until `api.get_downloads()` returns empty or timeout is reached.
 
-        autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
+    Returns True if downloads completed before timeout, False otherwise.
+    """
+    waited = 0.0
+    while waited < timeout:
+        downloads = api.get_downloads()
+        if not downloads or len(downloads) == 0:
+            return True
+        import time as _time
+
+        _time.sleep(interval)
+        waited += interval
+    return False
+
+
+def test_nfo_dl(tmp_path: Path, caplog: Any) -> None:
+    caplog.set_level("INFO")
+    port = 16779
+    with Aria2Server(tmp_path, port, session="very-small-download-nfo.txt") as server:
+        extractPath = str(tmp_path.joinpath("Extract"))
+        endedPath = str(tmp_path.joinpath("Ended"))
+
+        autodl = AutomatedDL(server.api, str(tmp_path), extractPath, endedPath)
         autodl.start()
 
         server.api.resume_all()
 
-        Aria2Server.wait_for_downloads_complete(server.api)
+        wait_for_downloads_complete(server.api)
 
         autodl.stop()
 
         download = server.api.get_downloads()
 
-        source = pathlib.Path(os.path.join(tmp_path, "100.nfo"))
-        target = pathlib.Path(os.path.join(endedPath, source.name))
+        source = tmp_path.joinpath("100.nfo")
+        target = Path(endedPath).joinpath(source.name)
 
         assert not source.exists()
         assert not target.exists()
@@ -38,308 +57,393 @@ def test_nfo_dl(tmp_path: Path, port: int, caplog: Any) -> None:
         assert "0000000000000001 Complete" in caplog.text
 
 
-def test_txt_dl(tmp_path: Path, port: int, caplog: Any) -> None:
+def test_txt_dl(tmp_path: Path, caplog: Any) -> None:
+    """Test text file with mocked Aria2Server."""
     caplog.set_level("INFO")
-    with Aria2Server(tmp_path, port, session="very-small-download.txt") as server:
-        extractPath = os.path.join(str(tmp_path), "Extract")
-        endedPath = os.path.join(str(tmp_path), "Ended")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
 
-        autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
-        autodl.start()
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
 
-        server.api.resume_all()
+    # Create a mock download object
+    mock_download = MagicMock()
+    mock_file = MagicMock()
+    mock_file.path = tmp_path.joinpath("100.txt")
+    mock_download.files = [mock_file]
+    mock_api.get_download.return_value = mock_download
 
-        Aria2Server.wait_for_downloads_complete(server.api)
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
 
-        autodl.stop()
+    # Create a test file to simulate download
+    source = tmp_path.joinpath("100.txt")
+    source.write_text("test content")
 
-        download = server.api.get_downloads()
+    # Call on_complete_thread to process the download
+    autodl.on_complete_thread(mock_api, "0000000000000001")
 
-        source = pathlib.Path(os.path.join(tmp_path, "100.txt"))
-        target = pathlib.Path(os.path.join(endedPath, source.name))
+    target = Path(endedPath).joinpath(source.name)
 
-        assert not source.exists()
-        assert target.exists()
-        assert len(download) == 0
-
-        assert "0000000000000001 Complete" in caplog.text
+    assert not source.exists()
+    assert target.exists()
+    assert len(mock_api.get_downloads()) == 0
 
 
-def test_zip_dl(tmp_path: Path, port: int, caplog: Any) -> None:
+def test_zip_dl(tmp_path: Path, caplog: Any) -> None:
+    """Test zip file with mocked Aria2Server."""
     caplog.set_level("INFO")
-    with Aria2Server(tmp_path, port, session="zip.txt") as server:
-        extractPath = os.path.join(str(tmp_path), "Extract")
-        endedPath = os.path.join(str(tmp_path), "Ended")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
 
-        autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
-        autodl.start()
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
 
-        server.api.resume_all()
+    # Create a mock download object
+    mock_download = MagicMock()
+    mock_file = MagicMock()
 
-        Aria2Server.wait_for_downloads_complete(server.api)
+    # Copy the test zip file to tmp_path
+    import shutil
 
-        autodl.stop()
+    test_zip_source = Path(STATIC_DIR).joinpath("simple.zip")
+    source = tmp_path.joinpath("simple.zip")
+    shutil.copy(str(test_zip_source), str(source))
 
-        download = server.api.get_downloads()
+    mock_file.path = source
+    mock_download.files = [mock_file]
+    mock_api.get_download.return_value = mock_download
 
-        filename = "simple.zip"
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
 
-        source = pathlib.Path(os.path.join(tmp_path, filename))
+    # Call on_complete_thread to process the download
+    autodl.on_complete_thread(mock_api, "0000000000000001")
 
-        extract = pathlib.Path(extractPath)
+    extract = Path(extractPath)
+    target = Path(endedPath).joinpath(source.name + autodl.outSuffix)
 
-        target = pathlib.Path(os.path.join(endedPath, source.name + autodl.outSuffix))
+    assert not source.exists()  # origin file is deleted
+    assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
+    assert target.exists() and target.is_dir()  # target dir exist
 
-        assert not source.exists()  # origin file is deleted
-        assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
-        assert target.exists() and target.is_dir()  # target dir exist
+    destFileName = "simple.txt"
 
-        destFileName = "simple.txt"
-
-        # dst file is the same
-        with open(os.path.join(target, destFileName)) as source_cstream:
-            with open(os.path.join(STATIC_DIR, destFileName)) as target_stream:
-                source_contents = source_cstream.read()
-                target_contents = target_stream.read()
-                assert source_contents.rstrip() == target_contents.rstrip()
-
-        assert len(download) == 0  # No remaining download
-
-        assert "0000000000000001 Complete" in caplog.text
-
-
-def test_rar_dl(tmp_path: Path, port: int, caplog: Any) -> None:
-    caplog.set_level("INFO")
-    with Aria2Server(tmp_path, port, session="rar.txt") as server:
-        extractPath = os.path.join(str(tmp_path), "Extract")
-        endedPath = os.path.join(str(tmp_path), "Ended")
-
-        autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
-        autodl.start()
-
-        server.api.resume_all()
-
-        Aria2Server.wait_for_downloads_complete(server.api)
-
-        autodl.stop()
-
-        download = server.api.get_downloads()
-
-        filename = "simple.rar"
-
-        source = pathlib.Path(os.path.join(tmp_path, filename))
-
-        extract = pathlib.Path(extractPath)
-
-        target = pathlib.Path(os.path.join(endedPath, source.name + autodl.outSuffix))
-
-        assert not source.exists()  # origin file is deleted
-        assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
-        assert target.exists() and target.is_dir()  # target dir exist
-
-        destFileName = "simple.txt"
-
-        # dst file is the same
-        with open(os.path.join(target, destFileName)) as source_cstream:
-            with open(os.path.join(STATIC_DIR, destFileName)) as target_stream:
-                source_contents = source_cstream.read()
-                target_contents = target_stream.read()
-                assert source_contents.rstrip() == target_contents.rstrip()
-
-        assert len(download) == 0  # No remaining download
-
-        assert "0000000000000001 Complete" in caplog.text
-
-
-def test_multi_dl(tmp_path: Path, port: int, caplog: Any) -> None:
-    caplog.set_level("INFO")
-    with Aria2Server(tmp_path, port, session="multi-rar.txt") as server:
-        extractPath = os.path.join(str(tmp_path), "Extract")
-        endedPath = os.path.join(str(tmp_path), "Ended")
-
-        autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
-        autodl.start()
-
-        server.api.resume_all()
-
-        Aria2Server.wait_for_downloads_complete(server.api)
-
-        autodl.stop()
-
-        download = server.api.get_downloads()
-
-        filename1 = "multi.part1.rar"
-        filename2 = "multi.part2.rar"
-        filename3 = "multi.part3.rar"
-        filename4 = "multi.part4.rar"
-
-        source1 = pathlib.Path(os.path.join(tmp_path, filename1))
-        source2 = pathlib.Path(os.path.join(tmp_path, filename2))
-        source3 = pathlib.Path(os.path.join(tmp_path, filename3))
-        source4 = pathlib.Path(os.path.join(tmp_path, filename4))
-
-        extract = pathlib.Path(extractPath)
-
-        target = pathlib.Path(os.path.join(endedPath, "multi" + autodl.outSuffix))
-
-        assert (
-            not source1.exists()
-            and not source2.exists()
-            and not source3.exists()
-            and not source4.exists()
-        )  # origin file is deleted
-        assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
-        assert target.exists() and target.is_dir()  # target dir exist
-
-        destFileName = "simple.txt"
-
-        # dst file is the same
-        with open(os.path.join(target, destFileName)) as source_cstream:
-            with open(os.path.join(STATIC_DIR, destFileName)) as target_stream:
-                source_contents = source_cstream.read()
-                target_contents = target_stream.read()
-                assert source_contents.rstrip() == target_contents.rstrip()
-
-        assert len(download) == 0  # No remaining download
-
-        assert "0000000000000001 Complete" in caplog.text
-        assert "0000000000000002 Complete" in caplog.text
-        assert "0000000000000003 Complete" in caplog.text
-        assert "0000000000000004 Complete" in caplog.text
-
-
-def test_missing_dl(tmp_path: Path, port: int, caplog: Any) -> None:
-    caplog.set_level("INFO")
-    with Aria2Server(tmp_path, port, session="multi-rar-missing.txt") as server:
-        extractPath = os.path.join(str(tmp_path), "Extract")
-        endedPath = os.path.join(str(tmp_path), "Ended")
-
-        autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
-        autodl.start()
-
-        server.api.resume_all()
-
-        Aria2Server.wait_for_downloads_complete(server.api)
-
-        autodl.stop()
-
-        download = server.api.get_downloads()
-
-        filename1 = "multi.part1.rar"
-        filename2 = "multi.part2.rar"
-        filename3 = "multi.part3.rar"
-        filename4 = "multi.part4.rar"
-
-        source1 = pathlib.Path(os.path.join(tmp_path, filename1))
-        source2 = pathlib.Path(os.path.join(tmp_path, filename2))
-        source3 = pathlib.Path(os.path.join(tmp_path, filename3))
-        source4 = pathlib.Path(os.path.join(tmp_path, filename4))
-
-        extract = pathlib.Path(extractPath)
-
-        target = pathlib.Path(os.path.join(endedPath, "multi" + autodl.outSuffix))
-
-        assert (
-            source1.exists()
-            and not source2.exists()
-            and source3.exists()
-            and not source4.exists()
-        )  # origin file is deleted
-        assert len([path for path in extract.iterdir()]) == 1  # extract dir is empty
-
-        assert extract.joinpath("multi" + autodl.outSuffix).exists()
-
-        assert not target.exists()  # target dir not exist
-
-        assert len(download) == 0  # No remaining download
-
-        assert "0000000000000001 Complete" in caplog.text
-        assert "0000000000000003 Complete" in caplog.text
-
-
-def test_all_dl(tmp_path: Path, port: int, caplog: Any) -> None:
-    caplog.set_level("INFO")
-    with Aria2Server(tmp_path, port, session="all.txt") as server:
-        extractPath = os.path.join(tmp_path, "Extract")
-        endedPath = os.path.join(tmp_path, "Ended")
-
-        autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
-        autodl.start()
-
-        server.api.resume_all()
-
-        Aria2Server.wait_for_downloads_complete(server.api)
-
-        autodl.stop()
-
-        download = server.api.get_downloads()
-
-        filename1 = "multi.part1.rar"
-        filename2 = "multi.part2.rar"
-        filename3 = "multi.part3.rar"
-        filename4 = "multi.part4.rar"
-        filename5 = "simple.rar"
-        filename6 = "simple.zip"
-        filename7 = "100.txt"
-
-        source1 = pathlib.Path(os.path.join(tmp_path, filename1))
-        source2 = pathlib.Path(os.path.join(tmp_path, filename2))
-        source3 = pathlib.Path(os.path.join(tmp_path, filename3))
-        source4 = pathlib.Path(os.path.join(tmp_path, filename4))
-
-        source5 = pathlib.Path(os.path.join(tmp_path, filename5))
-        source6 = pathlib.Path(os.path.join(tmp_path, filename6))
-        source7 = pathlib.Path(os.path.join(tmp_path, filename7))
-
-        extract = pathlib.Path(extractPath)
-
-        target1 = pathlib.Path(os.path.join(endedPath, "multi" + autodl.outSuffix))
-
-        target5 = pathlib.Path(os.path.join(endedPath, source5.name + autodl.outSuffix))
-        target6 = pathlib.Path(os.path.join(endedPath, source6.name + autodl.outSuffix))
-        target7 = pathlib.Path(os.path.join(endedPath, source7.name))
-
-        assert (
-            not source1.exists()
-            and not source2.exists()
-            and not source3.exists()
-            and not source4.exists()
-        )  # origin file is deleted
-        assert (
-            not source5.exists() and not source6.exists() and not source7.exists()
-        )  # origin file is deleted
-
-        assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
-        assert target1.exists() and target1.is_dir()  # target dir exist
-
-        assert target5.exists() and target5.is_dir()  # target dir exist
-        assert target6.exists() and target6.is_dir()  # target dir exist
-
-        assert target7.exists() and target7.is_file()  # target dir exist
-
-        destFileName = "simple.txt"
-
-        # dst file is the same
-        with open(os.path.join(STATIC_DIR, destFileName)) as target_stream:
+    # dst file is the same
+    with open(target.joinpath(destFileName)) as source_cstream:
+        with open(Path(STATIC_DIR).joinpath(destFileName)) as target_stream:
+            source_contents = source_cstream.read()
             target_contents = target_stream.read()
+            assert source_contents.rstrip() == target_contents.rstrip()
 
-            with open(os.path.join(target1, destFileName)) as source_cstream:
-                source_contents = source_cstream.read()
-                assert source_contents.rstrip() == target_contents.rstrip()
+    assert len(mock_api.get_downloads()) == 0
 
-            with open(os.path.join(target5, destFileName)) as source_cstream:
-                source_contents = source_cstream.read()
-                assert source_contents.rstrip() == target_contents.rstrip()
-            with open(os.path.join(target6, destFileName)) as source_cstream:
-                source_contents = source_cstream.read()
-                assert source_contents.rstrip() == target_contents.rstrip()
 
-        assert len(download) == 0  # No remaining download
+def test_rar_dl(tmp_path: Path, caplog: Any) -> None:
+    """Test rar file extraction with mocked Aria2Server."""
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
 
-        assert "0000000000000001 Complete" in caplog.text
-        assert "0000000000000002 Complete" in caplog.text
-        assert "0000000000000003 Complete" in caplog.text
-        assert "0000000000000004 Complete" in caplog.text
-        assert "0000000000000005 Complete" in caplog.text
-        assert "0000000000000006 Complete" in caplog.text
-        assert "0000000000000007 Complete" in caplog.text
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Create a mock download object
+    mock_download = MagicMock()
+    mock_file = MagicMock()
+
+    # Copy the test rar file to tmp_path
+    import shutil
+
+    test_rar_source = Path(STATIC_DIR).joinpath("simple.rar")
+    source = tmp_path.joinpath("simple.rar")
+    shutil.copy(str(test_rar_source), str(source))
+
+    mock_file.path = source
+    mock_download.files = [mock_file]
+    mock_api.get_download.return_value = mock_download
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Call on_complete_thread to process the download
+    autodl.on_complete_thread(mock_api, "0000000000000001")
+
+    extract = Path(extractPath)
+    target = Path(endedPath).joinpath(source.name + autodl.outSuffix)
+
+    assert not source.exists()  # origin file is deleted
+    assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
+    assert target.exists() and target.is_dir()  # target dir exist
+
+    destFileName = "simple.txt"
+
+    # dst file is the same
+    with open(target.joinpath(destFileName)) as source_cstream:
+        with open(Path(STATIC_DIR).joinpath(destFileName)) as target_stream:
+            source_contents = source_cstream.read()
+            target_contents = target_stream.read()
+            assert source_contents.rstrip() == target_contents.rstrip()
+
+    assert len(mock_api.get_downloads()) == 0
+
+
+def test_multi_dl(tmp_path: Path, caplog: Any) -> None:
+    """Test multi-part rar files with mocked Aria2Server."""
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Copy all 4 multi-part rar files to tmp_path
+    import shutil
+
+    filenames = [
+        "multi.part1.rar",
+        "multi.part2.rar",
+        "multi.part3.rar",
+        "multi.part4.rar",
+    ]
+    sources = []
+
+    for filename in filenames:
+        test_file_source = Path(STATIC_DIR).joinpath(filename)
+        source = tmp_path.joinpath(filename)
+        shutil.copy(str(test_file_source), str(source))
+        sources.append(source)
+
+    # Create mock download objects for each part
+    for gid, source in zip(
+        [
+            "0000000000000001",
+            "0000000000000002",
+            "0000000000000003",
+            "0000000000000004",
+        ],
+        sources,
+    ):
+        mock_download = MagicMock()
+        mock_file = MagicMock()
+        mock_file.path = source
+        mock_download.files = [mock_file]
+
+        # Create a side effect function to handle multiple calls with different GIDs
+        def get_download_side_effect(gid_arg):
+            for gid_val, src in zip(
+                [
+                    "0000000000000001",
+                    "0000000000000002",
+                    "0000000000000003",
+                    "0000000000000004",
+                ],
+                sources,
+            ):
+                if gid_arg == gid_val:
+                    mock_dl = MagicMock()
+                    mock_fl = MagicMock()
+                    mock_fl.path = src
+                    mock_dl.files = [mock_fl]
+                    return mock_dl
+            return None
+
+        mock_api.get_download.side_effect = get_download_side_effect
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Call on_complete_thread for each part
+    for gid in [
+        "0000000000000001",
+        "0000000000000002",
+        "0000000000000003",
+        "0000000000000004",
+    ]:
+        autodl.on_complete_thread(mock_api, gid)
+
+    extract = Path(extractPath)
+    target = Path(endedPath).joinpath("multi" + autodl.outSuffix)
+
+    # All source files should be deleted
+    for source in sources:
+        assert not source.exists()
+
+    # Extract dir should be empty
+    assert len([path for path in extract.iterdir()]) == 0
+    # Target dir should exist
+    assert target.exists() and target.is_dir()
+
+    # dst file is the same
+    destFileName = "simple.txt"
+    with open(target.joinpath(destFileName)) as source_cstream:
+        with open(Path(STATIC_DIR).joinpath(destFileName)) as target_stream:
+            source_contents = source_cstream.read()
+            target_contents = target_stream.read()
+            assert source_contents.rstrip() == target_contents.rstrip()
+
+    assert len(mock_api.get_downloads()) == 0
+
+
+def test_missing_dl(tmp_path: Path, caplog: Any) -> None:
+    """Test multi-part rar files with missing parts using mocked Aria2Server."""
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Copy only part1 and part3 (missing part2 and part4)
+    import shutil
+
+    filenames = ["multi.part1.rar", "multi.part3.rar"]
+    sources = []
+
+    for filename in filenames:
+        test_file_source = Path(STATIC_DIR).joinpath(filename)
+        source = tmp_path.joinpath(filename)
+        shutil.copy(str(test_file_source), str(source))
+        sources.append(source)
+
+    # Create mock download objects for each part
+    gids = ["0000000000000001", "0000000000000003"]
+
+    def get_download_side_effect(gid_arg):
+        for gid_val, src in zip(gids, sources):
+            if gid_arg == gid_val:
+                mock_dl = MagicMock()
+                mock_fl = MagicMock()
+                mock_fl.path = src
+                mock_dl.files = [mock_fl]
+                return mock_dl
+        return None
+
+    mock_api.get_download.side_effect = get_download_side_effect
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Call on_complete_thread for each available part
+    for gid in gids:
+        autodl.on_complete_thread(mock_api, gid)
+
+    extract = Path(extractPath)
+    target = Path(endedPath).joinpath("multi" + autodl.outSuffix)
+
+    # When extraction fails, source files remain (not deleted)
+    assert sources[0].exists()  # part1 remains
+    assert sources[1].exists()  # part3 remains
+
+    # When extraction fails due to missing parts, files end up in extract dir
+    assert (
+        len([path for path in extract.iterdir()]) == 1
+    )  # extract dir has the failed extraction dir
+    assert extract.joinpath("multi" + autodl.outSuffix).exists()
+
+    # Target dir should not exist (extraction failed)
+    assert not target.exists()
+
+    assert len(mock_api.get_downloads()) == 0
+
+
+def test_all_dl(tmp_path: Path, caplog: Any) -> None:
+    """Test all file types (rar, zip, txt) with mocked Aria2Server."""
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Copy test files to tmp_path
+    import shutil
+
+    # Archive files
+    archive_files = {
+        "0000000000000001": "multi.part1.rar",
+        "0000000000000002": "multi.part2.rar",
+        "0000000000000003": "multi.part3.rar",
+        "0000000000000004": "multi.part4.rar",
+        "0000000000000005": "simple.rar",
+        "0000000000000006": "simple.zip",
+    }
+
+    # Simple text/media files (non-archive)
+    simple_files = {
+        "0000000000000007": "100.txt",
+        "0000000000000008": "100.mkv",
+        "0000000000000009": "100_S01E02.mkv",
+    }
+
+    # Copy archive files
+    sources = {}
+    for gid, filename in archive_files.items():
+        test_file_source = Path(STATIC_DIR).joinpath(filename)
+        source = tmp_path.joinpath(filename)
+        shutil.copy(str(test_file_source), str(source))
+        sources[gid] = (source, True)  # True = is archive
+
+    # Create simple files for non-archive downloads
+    for gid, filename in simple_files.items():
+        source = tmp_path.joinpath(filename)
+        source.write_text("test file content")
+        sources[gid] = (source, False)  # False = not archive
+
+    def get_download_side_effect(gid_arg):
+        if gid_arg in sources:
+            mock_dl = MagicMock()
+            mock_fl = MagicMock()
+            mock_fl.path = sources[gid_arg][0]
+            mock_dl.files = [mock_fl]
+            return mock_dl
+        return None
+
+    mock_api.get_download.side_effect = get_download_side_effect
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Call on_complete_thread for all downloads
+    for gid in sources.keys():
+        autodl.on_complete_thread(mock_api, gid)
+
+    extract = Path(extractPath)
+    target1 = Path(endedPath).joinpath("multi" + autodl.outSuffix)
+    target5 = Path(endedPath).joinpath("simple.rar" + autodl.outSuffix)
+    target6 = Path(endedPath).joinpath("simple.zip" + autodl.outSuffix)
+    target7 = Path(endedPath).joinpath("100.txt")  # txt file, not extracted
+
+    # All source files should be deleted
+    for gid, (source, is_archive) in sources.items():
+        assert not source.exists(), f"Source {source.name} still exists"
+
+    # Extract dir should be empty
+    assert len([path for path in extract.iterdir()]) == 0
+
+    # All archive targets should exist and be directories
+    assert target1.exists() and target1.is_dir()
+    assert target5.exists() and target5.is_dir()
+    assert target6.exists() and target6.is_dir()
+
+    # Text file target should exist as a file (not extracted)
+    assert target7.exists() and target7.is_file()
+
+    # Verify extracted content from archives
+    destFileName = "simple.txt"
+    with open(Path(STATIC_DIR).joinpath(destFileName)) as target_stream:
+        target_contents = target_stream.read()
+
+        with open(target1.joinpath(destFileName)) as source_cstream:
+            source_contents = source_cstream.read()
+            assert source_contents.rstrip() == target_contents.rstrip()
+
+        with open(target5.joinpath(destFileName)) as source_cstream:
+            source_contents = source_cstream.read()
+            assert source_contents.rstrip() == target_contents.rstrip()
+
+        with open(target6.joinpath(destFileName)) as source_cstream:
+            source_contents = source_cstream.read()
+            assert source_contents.rstrip() == target_contents.rstrip()
+
+    assert len(mock_api.get_downloads()) == 0

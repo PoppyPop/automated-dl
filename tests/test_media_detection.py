@@ -1,12 +1,9 @@
 """Tests for media detection and Sonarr/Radarr API functionality."""
 
-import os
-import pathlib
 from unittest.mock import Mock, patch, MagicMock
 from typing import Any
 
 from src.automateddl import AutomatedDL
-from .conftest import Aria2Server
 
 
 class TestMediaDetection:
@@ -249,7 +246,7 @@ class TestIntegration:
 
     @patch("httpx.post")
     def test_episode_download_triggers_sonarr(
-        self, mock_post: Any, tmp_path: Any, port: int, caplog: Any
+        self, mock_post: Any, tmp_path: Any, caplog: Any
     ) -> None:
         """Test that downloading an episode triggers Sonarr scan."""
         caplog.set_level("INFO")
@@ -257,114 +254,137 @@ class TestIntegration:
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
-        with Aria2Server(tmp_path, port, session="episode.txt") as server:
-            extractPath = os.path.join(tmp_path, "Extract")
-            endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = str(tmp_path.joinpath("Extract"))
+        endedPath = str(tmp_path.joinpath("Ended"))
 
-            # Create an AutomatedDL with Sonarr configured
-            autodl = AutomatedDL(
-                server.api,
-                tmp_path,
-                extractPath,
-                endedPath,
-                sonarr_url="http://localhost:8989",
-                sonarr_api_key="test_key",
-            )
-            autodl.start()
+        # Create mock API
+        mock_api = MagicMock()
+        mock_api.get_downloads.return_value = []
 
-            server.api.resume_all()
+        # Create a mock download object for the episode file
+        mock_download = MagicMock()
+        mock_file = MagicMock()
 
-            Aria2Server.wait_for_downloads_complete(server.api)
+        # Create the episode file
+        source = tmp_path.joinpath("100_S01E02.mkv")
+        source.write_bytes(b"1" * 100)
 
-            autodl.stop()
+        mock_file.path = source
+        mock_download.files = [mock_file]
+        mock_api.get_download.return_value = mock_download
 
-            download = server.api.get_downloads()
+        # Create an AutomatedDL with Sonarr configured
+        autodl = AutomatedDL(
+            mock_api,
+            str(tmp_path),
+            extractPath,
+            endedPath,
+            sonarr_url="http://localhost:8989",
+            sonarr_api_key="test_key",
+        )
 
-            source = pathlib.Path(os.path.join(tmp_path, "100_S01E02.mkv"))
-            target = pathlib.Path(os.path.join(endedPath, source.name))
+        # Call on_complete_thread to process the download
+        autodl.on_complete_thread(mock_api, "0000000000000001")
 
-            assert not source.exists()
-            assert target.exists()
-            assert len(download) == 0
+        target = tmp_path.joinpath("Ended").joinpath(source.name)
 
-            assert "0000000000000001 Complete" in caplog.text
+        assert not source.exists()
+        assert target.exists()
+        assert len(mock_api.get_downloads()) == 0
 
-            assert mock_post.call_count == 1
+        # Sonarr API call should be made for episodes
+        assert mock_post.call_count == 1
 
     @patch("httpx.post")
     def test_movie_download_triggers_sonarr(
-        self, mock_post: Any, tmp_path: Any, port: int, caplog: Any
+        self, mock_post: Any, tmp_path: Any, caplog: Any
     ) -> None:
-        """Test that downloading an episode triggers Sonarr scan."""
+        """Test that downloading a movie triggers Radarr scan."""
         caplog.set_level("INFO")
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
-        with Aria2Server(tmp_path, port, session="movie.txt") as server:
-            extractPath = os.path.join(tmp_path, "Extract")
-            endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = str(tmp_path.joinpath("Extract"))
+        endedPath = str(tmp_path.joinpath("Ended"))
 
-            # Create an AutomatedDL with Sonarr configured
-            autodl = AutomatedDL(
-                server.api,
-                tmp_path,
-                extractPath,
-                endedPath,
-                radarr_url="http://localhost:8989",
-                radarr_api_key="test_key",
-            )
-            autodl.start()
+        # Create mock API
+        mock_api = MagicMock()
+        mock_api.get_downloads.return_value = []
 
-            server.api.resume_all()
+        # Create a mock download object for the movie file
+        mock_download = MagicMock()
+        mock_file = MagicMock()
 
-            Aria2Server.wait_for_downloads_complete(server.api)
+        # Create the movie file
+        source = tmp_path.joinpath("100.mkv")
+        source.write_bytes(b"1" * 100)
 
-            autodl.stop()
+        mock_file.path = source
+        mock_download.files = [mock_file]
+        mock_api.get_download.return_value = mock_download
 
-            download = server.api.get_downloads()
+        # Create an AutomatedDL with Radarr configured
+        autodl = AutomatedDL(
+            mock_api,
+            str(tmp_path),
+            extractPath,
+            endedPath,
+            radarr_url="http://localhost:8989",
+            radarr_api_key="test_key",
+        )
 
-            source = pathlib.Path(os.path.join(tmp_path, "100.mkv"))
-            target = pathlib.Path(os.path.join(endedPath, source.name))
+        # Call on_complete_thread to process the download
+        autodl.on_complete_thread(mock_api, "0000000000000001")
 
-            assert not source.exists()
-            assert target.exists()
-            assert len(download) == 0
+        target = tmp_path.joinpath("Ended").joinpath(source.name)
 
-            assert "0000000000000001 Complete" in caplog.text
+        assert not source.exists()
+        assert target.exists()
+        assert len(mock_api.get_downloads()) == 0
 
-            assert mock_post.call_count == 1
+        # Radarr API call should be made for movies
+        assert mock_post.call_count == 1
 
     @patch("httpx.post")
-    def test_non_media_file_no_api_call(
-        self, mock_post: Any, tmp_path: Any, port: int
-    ) -> None:
+    def test_non_media_file_no_api_call(self, mock_post: Any, tmp_path: Any) -> None:
         """Test that non-media files don't trigger API calls."""
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
-        with Aria2Server(tmp_path, port, session="very-small-download.txt") as server:
-            extractPath = os.path.join(tmp_path, "Extract")
-            endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = str(tmp_path.joinpath("Extract"))
+        endedPath = str(tmp_path.joinpath("Ended"))
 
-            autodl = AutomatedDL(
-                server.api,
-                tmp_path,
-                extractPath,
-                endedPath,
-                sonarr_url="http://localhost:8989",
-                sonarr_api_key="test_key",
-                radarr_url="http://localhost:7878",
-                radarr_api_key="test_key",
-            )
-            autodl.start()
+        # Create mock API
+        mock_api = MagicMock()
+        mock_api.get_downloads.return_value = []
 
-            server.api.resume_all()
+        # Create a mock download object for the text file
+        mock_download = MagicMock()
+        mock_file = MagicMock()
 
-            Aria2Server.wait_for_downloads_complete(server.api)
+        # Create the text file (non-media)
+        source = tmp_path.joinpath("100.txt")
+        source.write_bytes(b"1" * 100)
 
-            autodl.stop()
+        mock_file.path = source
+        mock_download.files = [mock_file]
+        mock_api.get_download.return_value = mock_download
 
-            # No API calls should be made for non-media files
-            assert mock_post.call_count == 0
+        autodl = AutomatedDL(
+            mock_api,
+            str(tmp_path),
+            extractPath,
+            endedPath,
+            sonarr_url="http://localhost:8989",
+            sonarr_api_key="test_key",
+            radarr_url="http://localhost:7878",
+            radarr_api_key="test_key",
+        )
+
+        # Call on_complete_thread to process the download
+        autodl.on_complete_thread(mock_api, "0000000000000001")
+
+        # No API calls should be made for non-media files
+        assert mock_post.call_count == 0

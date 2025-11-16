@@ -1,4 +1,0 @@
-http://localhost:8779/100
- gid=0000000000000001
- pause=true
- out=100_S01E02.mkv
