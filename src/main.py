@@ -14,10 +14,10 @@ import automateddl
 level_env = os.getenv("LOG_LEVEL", "INFO")
 try:
     if str(level_env).isdigit():
-        level = int(level_env)
+        level: int = int(level_env)
     else:
-        level = getattr(logging, str(level_env).upper(), None)
-        if level is None:
+        level = getattr(logging, str(level_env).upper(), logging.INFO)
+        if not isinstance(level, int):
             # Fallback to INFO if the provided name isn't valid
             level = logging.INFO
 except Exception:
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Get Config fom environnement
 
 server: str = os.getenv("SERVER", "http://127.0.0.1")
-port: str = os.getenv("PORT", "6800")
+port: int = int(os.getenv("PORT", "6800"))
 secret: str = os.getenv("SECRET", "")
 
 downloaddir: str = os.getenv("DOWNLOADDIR", "/downloads")

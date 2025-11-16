@@ -3,7 +3,8 @@
 import time
 import os.path
 import pathlib
-
+from pathlib import Path
+from typing import Any
 
 from . import STATIC_DIR
 from .conftest import Aria2Server
@@ -11,11 +12,11 @@ from .conftest import Aria2Server
 from src.automateddl import AutomatedDL
 
 
-def test_nfo_dl(tmp_path, port, caplog):
+def test_nfo_dl(tmp_path: Path, port: int, caplog: Any) -> None:
     caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="very-small-download-nfo.txt") as server:
-        extractPath = os.path.join(tmp_path, "Extract")
-        endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = os.path.join(str(tmp_path), "Extract")
+        endedPath = os.path.join(str(tmp_path), "Ended")
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
@@ -39,11 +40,11 @@ def test_nfo_dl(tmp_path, port, caplog):
         assert "0000000000000001 Complete" in caplog.text
 
 
-def test_txt_dl(tmp_path, port, caplog):
+def test_txt_dl(tmp_path: Path, port: int, caplog: Any) -> None:
     caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="very-small-download.txt") as server:
-        extractPath = os.path.join(tmp_path, "Extract")
-        endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = os.path.join(str(tmp_path), "Extract")
+        endedPath = os.path.join(str(tmp_path), "Ended")
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
@@ -68,11 +69,11 @@ def test_txt_dl(tmp_path, port, caplog):
         assert "0000000000000001 Complete" in caplog.text
 
 
-def test_zip_dl(tmp_path, port, caplog):
+def test_zip_dl(tmp_path: Path, port: int, caplog: Any) -> None:
     caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="zip.txt") as server:
-        extractPath = os.path.join(tmp_path, "Extract")
-        endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = os.path.join(str(tmp_path), "Extract")
+        endedPath = os.path.join(str(tmp_path), "Ended")
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
@@ -113,11 +114,11 @@ def test_zip_dl(tmp_path, port, caplog):
         assert "0000000000000001 Complete" in caplog.text
 
 
-def test_rar_dl(tmp_path, port, caplog):
+def test_rar_dl(tmp_path: Path, port: int, caplog: Any) -> None:
     caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="rar.txt") as server:
-        extractPath = os.path.join(tmp_path, "Extract")
-        endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = os.path.join(str(tmp_path), "Extract")
+        endedPath = os.path.join(str(tmp_path), "Ended")
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
@@ -158,11 +159,11 @@ def test_rar_dl(tmp_path, port, caplog):
         assert "0000000000000001 Complete" in caplog.text
 
 
-def test_multi_dl(tmp_path, port, caplog):
+def test_multi_dl(tmp_path: Path, port: int, caplog: Any) -> None:
     caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="multi-rar.txt") as server:
-        extractPath = os.path.join(tmp_path, "Extract")
-        endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = os.path.join(str(tmp_path), "Extract")
+        endedPath = os.path.join(str(tmp_path), "Ended")
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
@@ -217,11 +218,11 @@ def test_multi_dl(tmp_path, port, caplog):
         assert "0000000000000004 Complete" in caplog.text
 
 
-def test_missing_dl(tmp_path, port, caplog):
+def test_missing_dl(tmp_path: Path, port: int, caplog: Any) -> None:
     caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="multi-rar-missing.txt") as server:
-        extractPath = os.path.join(tmp_path, "Extract")
-        endedPath = os.path.join(tmp_path, "Ended")
+        extractPath = os.path.join(str(tmp_path), "Extract")
+        endedPath = os.path.join(str(tmp_path), "Ended")
 
         autodl = AutomatedDL(server.api, tmp_path, extractPath, endedPath)
         autodl.start()
@@ -268,7 +269,7 @@ def test_missing_dl(tmp_path, port, caplog):
         assert "0000000000000003 Complete" in caplog.text
 
 
-def test_all_dl(tmp_path, port, caplog):
+def test_all_dl(tmp_path: Path, port: int, caplog: Any) -> None:
     caplog.set_level("INFO")
     with Aria2Server(tmp_path, port, session="all.txt") as server:
         extractPath = os.path.join(tmp_path, "Extract")
