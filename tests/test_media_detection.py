@@ -295,6 +295,11 @@ class TestIntegration:
         # Sonarr API call should be made for episodes
         assert mock_post.call_count == 1
 
+        # Verify the path points to the series subdirectory
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["name"] == "DownloadedEpisodesScan"
+        assert call_args[1]["json"]["path"] == str(tmp_path.joinpath("Ended", "series"))
+
     @patch("httpx.post")
     def test_movie_download_triggers_sonarr(
         self, mock_post: Any, tmp_path: Any, caplog: Any
@@ -345,6 +350,11 @@ class TestIntegration:
 
         # Radarr API call should be made for movies
         assert mock_post.call_count == 1
+
+        # Verify the path points to the movies subdirectory
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["name"] == "DownloadedMoviesScan"
+        assert call_args[1]["json"]["path"] == str(tmp_path.joinpath("Ended", "movies"))
 
     @patch("httpx.post")
     def test_non_media_file_no_api_call(self, mock_post: Any, tmp_path: Any) -> None:
@@ -437,6 +447,13 @@ class TestIntegration:
         assert tmp_path.joinpath("Ended", "series").exists()
         assert mock_post.call_count == 1
 
+        # Verify the path points to the specific extracted directory
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["name"] == "DownloadedEpisodesScan"
+        assert call_args[1]["json"]["path"] == str(
+            tmp_path.joinpath("Ended", "series", "episode.zip-OUT")
+        )
+
     @patch("httpx.post")
     def test_archive_movie_triggers_radarr(self, mock_post: Any, tmp_path: Any) -> None:
         """Zipped movie should extract, move under movies, and trigger Radarr."""
@@ -482,6 +499,13 @@ class TestIntegration:
         # Expect moved under movies and Radarr called
         assert tmp_path.joinpath("Ended", "movies").exists()
         assert mock_post.call_count == 1
+
+        # Verify the path points to the specific extracted directory
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["name"] == "DownloadedMoviesScan"
+        assert call_args[1]["json"]["path"] == str(
+            tmp_path.joinpath("Ended", "movies", "movie.zip-OUT")
+        )
 
     @patch("httpx.post")
     def test_archive_nested_media_goes_to_others(
