@@ -308,7 +308,7 @@ class AutomatedDL:
             return
 
         try:
-            url = f"{self.__sonarr_url}/api/v3/command"
+            url = f"{self.__sonarr_url.rstrip('/')}/api/v3/command"
             headers = {"X-Api-Key": self.__sonarr_api_key}
             payload = {
                 "name": "DownloadedEpisodesScan",
@@ -329,7 +329,7 @@ class AutomatedDL:
             return
 
         try:
-            url = f"{self.__radarr_url}/api/v3/command"
+            url = f"{self.__radarr_url.rstrip('/')}/api/v3/command"
             headers = {"X-Api-Key": self.__radarr_api_key}
             payload = {
                 "name": "DownloadedMoviesScan",
