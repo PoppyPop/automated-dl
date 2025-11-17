@@ -168,7 +168,7 @@ class AutomatedDL:
                     filterdDls = list(
                         filter(
                             lambda download: download.name.startswith(
-                                m.group("filename")
+                                m.group("filename")  # pyright: ignore[reportOptionalMemberAccess]
                             ),
                             dls,
                         )

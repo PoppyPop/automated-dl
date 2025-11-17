@@ -54,6 +54,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: set lower case owner name
+        run: |
+          echo "OWNER_LC=${OWNER,,}" >> $GITHUB_ENV
+        env:
+          OWNER: "${{ github.repository_owner }}"
       - name: Extract Docker tags
         id: extract_tags
         run: |
@@ -69,7 +74,7 @@ jobs:
             MAJOR_MINOR="$MAJOR"
           fi
           echo "DOCKER_TAGS=${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${TAG_NAME},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR_MINOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest" >> $GITHUB_ENV
-          echo "GHCR_TAGS=ghcr.io/${{ github.repository_owner }}/automated-dl:${TAG_NAME},ghcr.io/${{ github.repository_owner }}/automated-dl:${MAJOR},ghcr.io/${{ github.repository_owner }}/automated-dl:${MAJOR_MINOR},ghcr.io/${{ github.repository_owner }}/automated-dl:latest" >> $GITHUB_ENV
+          echo "GHCR_TAGS=ghcr.io/${{ env.OWNER_LC }}/automated-dl:${TAG_NAME},ghcr.io/${{ env.OWNER_LC }}/automated-dl:${MAJOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:${MAJOR_MINOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:latest" >> $GITHUB_ENV
 
       - name: Build and push to DockerHub
         id: docker_build_dockerhub
