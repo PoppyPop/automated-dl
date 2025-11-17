@@ -65,6 +65,14 @@ jobs:
           TAG_NAME="${GITHUB_REF_NAME}"
           # Remove leading 'v' if present for numeric tags
           BASE_TAG=${TAG_NAME#v}
+
+          # Check if tag matches semver pattern (X.Y.Z)
+          if [[ "$BASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            SEMVER_VALID=true
+          else
+            SEMVER_VALID=false
+          fi
+
           # Get major, major.minor, and full
           MAJOR=$(echo "$BASE_TAG" | cut -d. -f1)
           MINOR=$(echo "$BASE_TAG" | cut -d. -f2)
@@ -73,8 +81,15 @@ jobs:
           else
             MAJOR_MINOR="$MAJOR"
           fi
-          echo "DOCKER_TAGS=${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${TAG_NAME},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR_MINOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest" >> $GITHUB_ENV
-          echo "GHCR_TAGS=ghcr.io/${{ env.OWNER_LC }}/automated-dl:${TAG_NAME},ghcr.io/${{ env.OWNER_LC }}/automated-dl:${MAJOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:${MAJOR_MINOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:latest" >> $GITHUB_ENV
+
+          # Build tags - include latest only if semver is valid
+          if [ "$SEMVER_VALID" = true ]; then
+            echo "DOCKER_TAGS=${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${TAG_NAME},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR_MINOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest" >> $GITHUB_ENV
+            echo "GHCR_TAGS=ghcr.io/${{ env.OWNER_LC }}/automated-dl:${TAG_NAME},ghcr.io/${{ env.OWNER_LC }}/automated-dl:${MAJOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:${MAJOR_MINOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:latest" >> $GITHUB_ENV
+          else
+            echo "DOCKER_TAGS=${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${TAG_NAME}" >> $GITHUB_ENV
+            echo "GHCR_TAGS=ghcr.io/${{ env.OWNER_LC }}/automated-dl:${TAG_NAME}" >> $GITHUB_ENV
+          fi
 
       - name: Build and push to DockerHub
         id: docker_build_dockerhub
