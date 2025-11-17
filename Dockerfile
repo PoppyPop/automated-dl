@@ -2,6 +2,9 @@
 FROM python:alpine3.22
 #FROM python:slim
 
+# Build argument for version
+ARG VERSION=dev
+
 # Keeps Python from generating .pyc files in the container
 ENV PYTHONDONTWRITEBYTECODE=1
 
@@ -29,6 +32,9 @@ RUN python -m pip install -r requirements.txt
 
 WORKDIR /app
 ADD src /app
+
+# Update version in __init__.py
+RUN sed -i "s/__version__ = \".*\"/__version__ = \"${VERSION}\"/" /app/automateddl/__init__.py
 
 # Switching to a non-root user, please refer to https://aka.ms/vscode-docker-python-user-rights
 #RUN useradd appuser && chown -R appuser /app

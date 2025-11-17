@@ -30,6 +30,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Log version
+logger.info(f"AutomatedDL version: {automateddl.__version__}")
+
 # Get Config fom environnement
 
 server: str = os.getenv("SERVER", "http://127.0.0.1")
