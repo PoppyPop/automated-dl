@@ -257,10 +257,12 @@ class AutomatedDL:
         Args:
             category: The MediaCategory enum value
         """
+        category_path = os.path.join(self.__endedpath, category.value)
+
         if category == MediaCategory.SERIES:
-            self._trigger_sonarr_scan(self.__endedpath)
+            self._trigger_sonarr_scan(category_path)
         elif category == MediaCategory.MOVIES:
-            self._trigger_radarr_scan(self.__endedpath)
+            self._trigger_radarr_scan(category_path)
 
     def _is_media_file(self, filename: str) -> bool:
         """Check if the file is a media (video) file."""
