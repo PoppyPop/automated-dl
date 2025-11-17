@@ -58,7 +58,7 @@ export PORT=6800
 export SECRET=""              # aria2 rpc-secret if configured
 
 export DOWNLOADDIR=/downloads
-export EXRACTDIR=/downloads/Extract
+export EXTRACTDIR=/downloads/Extract
 export ENDEDDIR=/downloads/Ended
 
 # Optional Sonarr/Radarr integration
@@ -78,7 +78,7 @@ Logging level can be controlled via `LOG_LEVEL` (e.g. `DEBUG`, `INFO`).
 - `PORT`: Aria2 RPC port (default `6800`)
 - `SECRET`: Aria2 RPC secret if enabled
 - `DOWNLOADDIR`: Directory where Aria2 writes files (default `/downloads`)
-- `EXRACTDIR`: Temporary extraction directory (default `/downloads/Extract`)
+- `EXTRACTDIR`: Temporary extraction directory (default `/downloads/Extract`)
 - `ENDEDDIR`: Final destination directory (default `/downloads/Ended`)
 - `SONARR_URL`, `SONARR_API_KEY`: Enable Sonarr scan trigger when episodes are detected
 - `RADARR_URL`, `RADARR_API_KEY`: Enable Radarr scan trigger when movies are detected
@@ -90,11 +90,21 @@ The core class `AutomatedDL` subscribes to Aria2 notifications. On each complete
 
 1. Identifies file type (nfo, archive, or other)
 2. For `.nfo`: removes the download entry
-3. For `.zip`/`.rar` or multi-part rar: extracts to `EXRACTDIR`, moves the result to `ENDEDDIR`, and cleans parts
+3. For `.zip`/`.rar` or multi-part rar: extracts to `EXTRACTDIR`, moves the result to `ENDEDDIR`, and cleans parts
 4. For other files: moves to `ENDEDDIR` and removes from Aria2
 5. If the final file is a media file, triggers Sonarr or Radarr accordingly
 
 See `src/automateddl/automateddl.py` for the full logic.
+
+### Destination Layout
+
+Within your `ENDEDDIR`, automated-dl categorizes processed items:
+
+- `series/`: TV episodes (filenames matching patterns like `S01E01`, `1x01`, etc.)
+- `movies/`: Movie files (media files that are not detected as episodes)
+- `others/`: Non-media files and extracted archive folders
+
+Archives are categorized by inspecting their extracted contents. If any extracted file is a media file with an episode pattern, the folder goes to `series/`; otherwise, if media files are present it goes to `movies/`; if no media is found it goes to `others/`.
 
 ## Docker
 
@@ -127,7 +137,7 @@ docker run --rm \
 	-e SERVER=http://host.docker.internal \
 	-e PORT=6800 \
 	-e DOWNLOADDIR=/downloads \
-	-e EXRACTDIR=/downloads/Extract \
+	-e EXTRACTDIR=/downloads/Extract \
 	-e ENDEDDIR=/downloads/Ended \
 	-e SONARR_URL=... -e SONARR_API_KEY=... \
 	-e RADARR_URL=... -e RADARR_API_KEY=... \

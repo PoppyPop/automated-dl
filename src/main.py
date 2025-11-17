@@ -37,7 +37,7 @@ port: int = int(os.getenv("PORT", "6800"))
 secret: str = os.getenv("SECRET", "")
 
 downloaddir: str = os.getenv("DOWNLOADDIR", "/downloads")
-extractdir: str = os.getenv("EXRACTDIR", "/downloads/Extract")
+extractdir: str = os.getenv("EXTRACTDIR", "/downloads/Extract")
 endeddir: str = os.getenv("ENDEDDIR", "/downloads/Ended")
 
 sonarr_url: str = os.getenv("SONARR_URL", "")
