@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+git fetch -u origin master:master
+
+git rebase master
