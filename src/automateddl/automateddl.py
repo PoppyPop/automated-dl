@@ -76,10 +76,12 @@ class AutomatedDL:
             return MediaCategory.SERIES if is_series else MediaCategory.MOVIES
         return MediaCategory.OTHERS
 
-    def Move(self, path: pathlib.Path, dest: str) -> tuple[MediaCategory, pathlib.Path]:
+    def Move(
+        self, path: pathlib.Path, dest: str
+    ) -> tuple[MediaCategory, list[pathlib.Path]]:
         """Move path to destination under appropriate category subdirectory.
 
-        Returns: Tuple of (category, final_destination_path)
+        Returns: Tuple of (category, media_files)
         """
         category = self._category_for_path(path)
         to_directory = pathlib.Path(dest) / category.value
@@ -89,7 +91,18 @@ class AutomatedDL:
 
         final_path = to_directory / path.name
         shutil.move(str(path), str(to_directory))
-        return category, final_path
+
+        # Collect media files (only immediate children, matching detection behavior)
+        media_files: list[pathlib.Path] = []
+        if final_path.is_file():
+            if self._is_media_file(final_path.name):
+                media_files.append(final_path)
+        elif final_path.is_dir():
+            for child in final_path.iterdir():
+                if child.is_file() and self._is_media_file(child.name):
+                    media_files.append(child)
+
+        return category, media_files
 
     def HandleArchive(self, gid: str, path: pathlib.Path, lockbase: str) -> None:
         logger.info(f"{gid} HandleArchive")
@@ -118,10 +131,10 @@ class AutomatedDL:
                         patoolib.extract_archive(str(path), outdir=outDir.as_posix())
 
                         logger.info(f"{gid} Move")
-                        category, final_path = self.Move(outDir, self.__endedpath)
+                        category, media_files = self.Move(outDir, self.__endedpath)
 
-                        # Trigger Sonarr/Radarr scan on the specific extracted directory
-                        self._trigger_scan_for_category(category, final_path)
+                        # Trigger Sonarr/Radarr scan on individual media files
+                        self._trigger_scan_for_category(category, media_files)
 
                         filetoremove = list(
                             filter(
@@ -201,11 +214,11 @@ class AutomatedDL:
             api.remove(downloads=[dl], clean=True)
         else:
             # MoveFs and RemoveApi
-            category, _ = self.Move(path, self.__endedpath)
+            category, media_files = self.Move(path, self.__endedpath)
             api.remove(downloads=[dl], clean=True)
 
             # Trigger Sonarr/Radarr scan after move based on category
-            self._trigger_scan_for_category(category)
+            self._trigger_scan_for_category(category, media_files)
 
     def on_complete_thread(self, api: aria2p.API, gid: str) -> None:
         logger.info(f"{gid} OnComplete")
@@ -253,23 +266,29 @@ class AutomatedDL:
         pathlib.Path(endedpath).mkdir(parents=True, exist_ok=True)
 
     def _trigger_scan_for_category(
-        self, category: MediaCategory, path: pathlib.Path | None = None
+        self, category: MediaCategory, media_files: list[pathlib.Path] | None = None
     ) -> None:
         """Trigger appropriate API scan based on category.
 
         Args:
             category: The MediaCategory enum value
-            path: Optional specific path to scan. If None, uses category subdirectory.
+            media_files: Optional list of media file paths to scan. If None or empty, scans category subdirectory.
         """
-        if path is None:
+        if not media_files:
+            # Fallback to scanning the entire category directory
             scan_path = pathlib.Path(self.__endedpath).joinpath(category.value)
+            if category == MediaCategory.SERIES:
+                self._trigger_sonarr_scan(scan_path)
+            elif category == MediaCategory.MOVIES:
+                self._trigger_radarr_scan(scan_path)
         else:
-            scan_path = path
-
-        if category == MediaCategory.SERIES:
-            self._trigger_sonarr_scan(scan_path)
-        elif category == MediaCategory.MOVIES:
-            self._trigger_radarr_scan(scan_path)
+            # Trigger scan for each individual media file
+            if category == MediaCategory.SERIES:
+                for media_file in media_files:
+                    self._trigger_sonarr_scan(media_file)
+            elif category == MediaCategory.MOVIES:
+                for media_file in media_files:
+                    self._trigger_radarr_scan(media_file)
 
     def _is_media_file(self, filename: str) -> bool:
         """Check if the file is a media (video) file."""
@@ -310,7 +329,7 @@ class AutomatedDL:
 
         return False
 
-    def _trigger_sonarr_scan(self, directory: pathlib.Path) -> None:
+    def _trigger_sonarr_scan(self, path: pathlib.Path) -> None:
         """Trigger Sonarr DownloadedEpisodesScan API."""
         if not self.__sonarr_url or not self.__sonarr_api_key:
             logger.debug("Sonarr not configured, skipping scan")
@@ -319,19 +338,23 @@ class AutomatedDL:
         try:
             url = f"{self.__sonarr_url.rstrip('/')}/api/v3/command"
             headers = {"X-Api-Key": self.__sonarr_api_key}
+            # Add trailing slash only for directories
+            path_str = str(path)
+            if path.is_dir():
+                path_str = path_str.rstrip("/") + "/"
             payload = {
                 "name": "DownloadedEpisodesScan",
-                "path": str(directory),
+                "path": path_str,
             }
 
             response = httpx.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
 
-            logger.info(f"Sonarr scan triggered for {directory}")
+            logger.info(f"Sonarr scan triggered for {path}")
         except Exception as e:
             logger.error(f"Error triggering Sonarr scan: {str(e)}")
 
-    def _trigger_radarr_scan(self, directory: pathlib.Path) -> None:
+    def _trigger_radarr_scan(self, path: pathlib.Path) -> None:
         """Trigger Radarr DownloadedMoviesScan API."""
         if not self.__radarr_url or not self.__radarr_api_key:
             logger.debug("Radarr not configured, skipping scan")
@@ -340,15 +363,19 @@ class AutomatedDL:
         try:
             url = f"{self.__radarr_url.rstrip('/')}/api/v3/command"
             headers = {"X-Api-Key": self.__radarr_api_key}
+            # Add trailing slash only for directories
+            path_str = str(path)
+            if path.is_dir():
+                path_str = path_str.rstrip("/") + "/"
             payload = {
                 "name": "DownloadedMoviesScan",
-                "path": str(directory),
+                "path": path_str,
             }
 
             response = httpx.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
 
-            logger.info(f"Radarr scan triggered for {directory}")
+            logger.info(f"Radarr scan triggered for {path}")
         except Exception as e:
             logger.error(f"Error triggering Radarr scan: {str(e)}")
 

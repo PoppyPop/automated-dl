@@ -1,5 +1,6 @@
 """Tests for media detection and Sonarr/Radarr API functionality."""
 
+import pathlib
 from unittest.mock import Mock, patch, MagicMock
 from typing import Any
 
@@ -103,7 +104,7 @@ class TestSonarrRadarrAPITrigger:
         """Test that no API call is made when Sonarr is not configured."""
         caplog.set_level("DEBUG")
         autodl = AutomatedDL(Mock(), "/tmp", "/tmp/extract", "/tmp/ended")
-        autodl._trigger_sonarr_scan("/tmp/ended")
+        autodl._trigger_sonarr_scan(pathlib.Path("/tmp/ended"))
 
         assert "Sonarr not configured, skipping scan" in caplog.text
 
@@ -111,7 +112,7 @@ class TestSonarrRadarrAPITrigger:
         """Test that no API call is made when Radarr is not configured."""
         caplog.set_level("DEBUG")
         autodl = AutomatedDL(Mock(), "/tmp", "/tmp/extract", "/tmp/ended")
-        autodl._trigger_radarr_scan("/tmp/ended")
+        autodl._trigger_radarr_scan(pathlib.Path("/tmp/ended"))
 
         assert "Radarr not configured, skipping scan" in caplog.text
 
@@ -131,14 +132,14 @@ class TestSonarrRadarrAPITrigger:
             sonarr_url="http://localhost:8989",
             sonarr_api_key="test_key",
         )
-        autodl._trigger_sonarr_scan("/tmp/ended")
+        autodl._trigger_sonarr_scan(pathlib.Path("/tmp/ended"))
 
         # Verify the API call was made with correct parameters
         mock_post.assert_called_once()
         call_args = mock_post.call_args
         assert call_args[0][0] == "http://localhost:8989/api/v3/command"
         assert call_args[1]["json"]["name"] == "DownloadedEpisodesScan"
-        assert call_args[1]["json"]["path"] == "/tmp/ended"
+        assert call_args[1]["json"]["path"] == "/tmp/ended/"
         assert call_args[1]["headers"]["X-Api-Key"] == "test_key"
 
         assert "Sonarr scan triggered for /tmp/ended" in caplog.text
@@ -159,14 +160,14 @@ class TestSonarrRadarrAPITrigger:
             radarr_url="http://localhost:7878",
             radarr_api_key="test_key",
         )
-        autodl._trigger_radarr_scan("/tmp/ended")
+        autodl._trigger_radarr_scan(pathlib.Path("/tmp/ended"))
 
         # Verify the API call was made with correct parameters
         mock_post.assert_called_once()
         call_args = mock_post.call_args
         assert call_args[0][0] == "http://localhost:7878/api/v3/command"
         assert call_args[1]["json"]["name"] == "DownloadedMoviesScan"
-        assert call_args[1]["json"]["path"] == "/tmp/ended"
+        assert call_args[1]["json"]["path"] == "/tmp/ended/"
         assert call_args[1]["headers"]["X-Api-Key"] == "test_key"
 
         assert "Radarr scan triggered for /tmp/ended" in caplog.text
@@ -191,7 +192,7 @@ class TestSonarrRadarrAPITrigger:
             radarr_url="http://localhost:7878",
             radarr_api_key="test_key",
         )
-        autodl._trigger_radarr_scan("/tmp/ended")
+        autodl._trigger_radarr_scan(pathlib.Path("/tmp/ended"))
 
         assert "Error triggering Radarr scan" in caplog.text
         assert "Connection error" in caplog.text
@@ -212,7 +213,7 @@ class TestSonarrRadarrAPITrigger:
             sonarr_url="http://localhost:8989",
             sonarr_api_key="test_key",
         )
-        autodl._trigger_sonarr_scan("/tmp/ended")
+        autodl._trigger_sonarr_scan(pathlib.Path("/tmp/ended"))
 
         # Verify timeout parameter was passed
         call_args = mock_post.call_args
@@ -234,7 +235,7 @@ class TestSonarrRadarrAPITrigger:
             radarr_url="http://localhost:7878",
             radarr_api_key="test_key",
         )
-        autodl._trigger_radarr_scan("/tmp/ended")
+        autodl._trigger_radarr_scan(pathlib.Path("/tmp/ended"))
 
         # Verify timeout parameter was passed
         call_args = mock_post.call_args
@@ -295,10 +296,12 @@ class TestIntegration:
         # Sonarr API call should be made for episodes
         assert mock_post.call_count == 1
 
-        # Verify the path points to the series subdirectory
+        # Verify the path points to the specific media file
         call_args = mock_post.call_args
         assert call_args[1]["json"]["name"] == "DownloadedEpisodesScan"
-        assert call_args[1]["json"]["path"] == str(tmp_path.joinpath("Ended", "series"))
+        assert call_args[1]["json"]["path"] == str(
+            tmp_path.joinpath("Ended", "series", "100_S01E02.mkv")
+        )
 
     @patch("httpx.post")
     def test_movie_download_triggers_sonarr(
@@ -351,10 +354,12 @@ class TestIntegration:
         # Radarr API call should be made for movies
         assert mock_post.call_count == 1
 
-        # Verify the path points to the movies subdirectory
+        # Verify the path points to the specific media file
         call_args = mock_post.call_args
         assert call_args[1]["json"]["name"] == "DownloadedMoviesScan"
-        assert call_args[1]["json"]["path"] == str(tmp_path.joinpath("Ended", "movies"))
+        assert call_args[1]["json"]["path"] == str(
+            tmp_path.joinpath("Ended", "movies", "100.mkv")
+        )
 
     @patch("httpx.post")
     def test_non_media_file_no_api_call(self, mock_post: Any, tmp_path: Any) -> None:
@@ -447,11 +452,11 @@ class TestIntegration:
         assert tmp_path.joinpath("Ended", "series").exists()
         assert mock_post.call_count == 1
 
-        # Verify the path points to the specific extracted directory
+        # Verify the path points to the specific media file within the extracted directory
         call_args = mock_post.call_args
         assert call_args[1]["json"]["name"] == "DownloadedEpisodesScan"
         assert call_args[1]["json"]["path"] == str(
-            tmp_path.joinpath("Ended", "series", "episode.zip-OUT")
+            tmp_path.joinpath("Ended", "series", "episode.zip-OUT", "Show.S01E01.mkv")
         )
 
     @patch("httpx.post")
@@ -500,11 +505,11 @@ class TestIntegration:
         assert tmp_path.joinpath("Ended", "movies").exists()
         assert mock_post.call_count == 1
 
-        # Verify the path points to the specific extracted directory
+        # Verify the path points to the specific media file within the extracted directory
         call_args = mock_post.call_args
         assert call_args[1]["json"]["name"] == "DownloadedMoviesScan"
         assert call_args[1]["json"]["path"] == str(
-            tmp_path.joinpath("Ended", "movies", "movie.zip-OUT")
+            tmp_path.joinpath("Ended", "movies", "movie.zip-OUT", "Movie.2025.mkv")
         )
 
     @patch("httpx.post")
