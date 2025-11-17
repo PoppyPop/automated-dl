@@ -329,6 +329,52 @@ class AutomatedDL:
 
         return False
 
+    def _check_command_status(
+        self, base_url: str, api_key: str, command_id: int, service_name: str
+    ) -> None:
+        """Check command status and wait for completion with retries.
+
+        Args:
+            base_url: Base URL of the service (Sonarr/Radarr)
+            api_key: API key for authentication
+            command_id: Command ID to check
+            service_name: Name of the service for logging (Sonarr/Radarr)
+        """
+        import time
+
+        url = f"{base_url.rstrip('/')}/api/v3/command/{command_id}"
+        headers = {"X-Api-Key": api_key}
+        max_retries = 3
+
+        for attempt in range(max_retries):
+            time.sleep(0.5)  # Wait 0.5 seconds before checking
+
+            try:
+                response = httpx.get(url, headers=headers, timeout=10)
+                response.raise_for_status()
+
+                data = response.json()
+                status = data.get("status", "")
+
+                if status == "completed":
+                    logger.info(f"{service_name} scan completed successfully")
+                    return
+
+                # If not completed and this is the last retry, log error
+                if attempt == max_retries - 1:
+                    message = data.get("message", "No message provided")
+                    logger.error(
+                        f"{service_name} scan failed with status '{status}': {message}"
+                    )
+                    return
+
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    logger.error(
+                        f"Error checking {service_name} command status: {str(e)}"
+                    )
+                    return
+
     def _trigger_sonarr_scan(self, path: pathlib.Path) -> None:
         """Trigger Sonarr DownloadedEpisodesScan API."""
         if not self.__sonarr_url or not self.__sonarr_api_key:
@@ -350,7 +396,15 @@ class AutomatedDL:
             response = httpx.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
 
-            logger.info(f"Sonarr scan triggered for {path}")
+            data = response.json()
+            command_id = data.get("id")
+
+            logger.info(f"Sonarr scan triggered for {path} (command ID: {command_id})")
+
+            if command_id:
+                self._check_command_status(
+                    self.__sonarr_url, self.__sonarr_api_key, command_id, "Sonarr"
+                )
         except Exception as e:
             logger.error(f"Error triggering Sonarr scan: {str(e)}")
 
@@ -375,7 +429,15 @@ class AutomatedDL:
             response = httpx.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
 
-            logger.info(f"Radarr scan triggered for {path}")
+            data = response.json()
+            command_id = data.get("id")
+
+            logger.info(f"Radarr scan triggered for {path} (command ID: {command_id})")
+
+            if command_id:
+                self._check_command_status(
+                    self.__radarr_url, self.__radarr_api_key, command_id, "Radarr"
+                )
         except Exception as e:
             logger.error(f"Error triggering Radarr scan: {str(e)}")
 
