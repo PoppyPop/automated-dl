@@ -8,10 +8,19 @@ import logging
 import threading
 import httpx
 from typing import Dict, List
+from enum import Enum
 
 from .lockbykey import LockByKey
 
 logger = logging.getLogger(__name__)
+
+
+class MediaCategory(Enum):
+    """Media file categories for organization."""
+
+    SERIES = "series"
+    MOVIES = "movies"
+    OTHERS = "others"
 
 
 class AutomatedDL:
@@ -29,13 +38,57 @@ class AutomatedDL:
 
     outSuffix: str = "-OUT"
 
-    def Move(self, path: pathlib.Path, dest: str) -> None:
-        to_directory = pathlib.Path(dest)
+    def _detect_media_type(self, path: pathlib.Path) -> tuple[bool, bool]:
+        """Detect if path contains media and if it's a series.
+
+        Returns: (has_media, is_series)
+        """
+        has_media = False
+        is_series = False
+
+        try:
+            if path.is_file():
+                if self._is_media_file(path.name):
+                    has_media = True
+                    is_series = self._is_episode(path.name)
+            elif path.is_dir():
+                for child in path.iterdir():
+                    if child.is_file() and self._is_media_file(child.name):
+                        has_media = True
+                        if self._is_episode(child.name):
+                            is_series = True
+                            break
+        except Exception as e:
+            logger.debug(
+                f"Exception during media detection for path {path}: {e}", exc_info=True
+            )
+
+        return has_media, is_series
+
+    def _category_for_path(self, path: pathlib.Path) -> MediaCategory:
+        """Determine destination subdirectory: series, movies, or others.
+
+        For directories, inspects contained files to infer media type.
+        """
+        has_media, is_series = self._detect_media_type(path)
+
+        if has_media:
+            return MediaCategory.SERIES if is_series else MediaCategory.MOVIES
+        return MediaCategory.OTHERS
+
+    def Move(self, path: pathlib.Path, dest: str) -> MediaCategory:
+        """Move path to destination under appropriate category subdirectory.
+
+        Returns: The category (series, movies, or others) the file was moved to.
+        """
+        category = self._category_for_path(path)
+        to_directory = pathlib.Path(dest) / category.value
 
         # raises FileExistsError when target is already a file
         to_directory.mkdir(parents=True, exist_ok=True)
 
         shutil.move(str(path), str(to_directory))
+        return category
 
     def HandleArchive(self, gid: str, path: pathlib.Path, lockbase: str) -> None:
         logger.info(f"{gid} HandleArchive")
@@ -64,7 +117,10 @@ class AutomatedDL:
                         patoolib.extract_archive(str(path), outdir=outDir.as_posix())
 
                         logger.info(f"{gid} Move")
-                        self.Move(outDir, self.__endedpath)
+                        category = self.Move(outDir, self.__endedpath)
+
+                        # Trigger Sonarr/Radarr scan after move based on category
+                        self._trigger_scan_for_category(category)
 
                         filetoremove = list(
                             filter(
@@ -144,15 +200,11 @@ class AutomatedDL:
             api.remove(downloads=[dl], clean=True)
         else:
             # MoveFs and RemoveApi
-            self.Move(path, self.__endedpath)
+            category = self.Move(path, self.__endedpath)
             api.remove(downloads=[dl], clean=True)
 
-            # Trigger Sonarr/Radarr scan if it's a media file
-            if self._is_media_file(path.name):
-                if self._is_episode(path.name):
-                    self._trigger_sonarr_scan(self.__endedpath)
-                else:
-                    self._trigger_radarr_scan(self.__endedpath)
+            # Trigger Sonarr/Radarr scan after move based on category
+            self._trigger_scan_for_category(category)
 
     def on_complete_thread(self, api: aria2p.API, gid: str) -> None:
         logger.info(f"{gid} OnComplete")
@@ -198,6 +250,17 @@ class AutomatedDL:
         pathlib.Path(downpath).mkdir(parents=True, exist_ok=True)
         pathlib.Path(extractpath).mkdir(parents=True, exist_ok=True)
         pathlib.Path(endedpath).mkdir(parents=True, exist_ok=True)
+
+    def _trigger_scan_for_category(self, category: MediaCategory) -> None:
+        """Trigger appropriate API scan based on category.
+
+        Args:
+            category: The MediaCategory enum value
+        """
+        if category == MediaCategory.SERIES:
+            self._trigger_sonarr_scan(self.__endedpath)
+        elif category == MediaCategory.MOVIES:
+            self._trigger_radarr_scan(self.__endedpath)
 
     def _is_media_file(self, filename: str) -> bool:
         """Check if the file is a media (video) file."""

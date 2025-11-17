@@ -286,7 +286,7 @@ class TestIntegration:
         # Call on_complete_thread to process the download
         autodl.on_complete_thread(mock_api, "0000000000000001")
 
-        target = tmp_path.joinpath("Ended").joinpath(source.name)
+        target = tmp_path.joinpath("Ended").joinpath("series", source.name)
 
         assert not source.exists()
         assert target.exists()
@@ -337,7 +337,7 @@ class TestIntegration:
         # Call on_complete_thread to process the download
         autodl.on_complete_thread(mock_api, "0000000000000001")
 
-        target = tmp_path.joinpath("Ended").joinpath(source.name)
+        target = tmp_path.joinpath("Ended").joinpath("movies", source.name)
 
         assert not source.exists()
         assert target.exists()
@@ -387,4 +387,148 @@ class TestIntegration:
         autodl.on_complete_thread(mock_api, "0000000000000001")
 
         # No API calls should be made for non-media files
+        assert mock_post.call_count == 0
+
+    @patch("httpx.post")
+    def test_archive_episode_triggers_sonarr(
+        self, mock_post: Any, tmp_path: Any
+    ) -> None:
+        """Zipped episode should extract, move under series, and trigger Sonarr."""
+        import shutil
+        from pathlib import Path
+        from . import STATIC_DIR
+
+        extractPath = str(tmp_path.joinpath("Extract"))
+        endedPath = str(tmp_path.joinpath("Ended"))
+
+        # Create mock API
+        mock_api = MagicMock()
+        mock_api.get_downloads.return_value = []
+
+        # Copy pre-made episode.zip from static dir
+        test_zip_source = Path(STATIC_DIR).joinpath("episode.zip")
+        source_zip = tmp_path.joinpath("episode.zip")
+        shutil.copy(str(test_zip_source), str(source_zip))
+
+        # Mock download pointing to the zip
+        mock_download = MagicMock()
+        mock_file = MagicMock()
+        mock_file.path = source_zip
+        mock_download.files = [mock_file]
+        mock_api.get_download.return_value = mock_download
+
+        # Patch httpx.post response
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        autodl = AutomatedDL(
+            mock_api,
+            str(tmp_path),
+            extractPath,
+            endedPath,
+            sonarr_url="http://localhost:8989",
+            sonarr_api_key="test_key",
+        )
+
+        autodl.on_complete_thread(mock_api, "00000000000000AE")
+
+        # Expect moved under series and Sonarr called
+        assert tmp_path.joinpath("Ended", "series").exists()
+        assert mock_post.call_count == 1
+
+    @patch("httpx.post")
+    def test_archive_movie_triggers_radarr(self, mock_post: Any, tmp_path: Any) -> None:
+        """Zipped movie should extract, move under movies, and trigger Radarr."""
+        import shutil
+        from pathlib import Path
+        from . import STATIC_DIR
+
+        extractPath = str(tmp_path.joinpath("Extract"))
+        endedPath = str(tmp_path.joinpath("Ended"))
+
+        # Create mock API
+        mock_api = MagicMock()
+        mock_api.get_downloads.return_value = []
+
+        # Copy pre-made movie.zip from static dir
+        test_zip_source = Path(STATIC_DIR).joinpath("movie.zip")
+        source_zip = tmp_path.joinpath("movie.zip")
+        shutil.copy(str(test_zip_source), str(source_zip))
+
+        # Mock download pointing to the zip
+        mock_download = MagicMock()
+        mock_file = MagicMock()
+        mock_file.path = source_zip
+        mock_download.files = [mock_file]
+        mock_api.get_download.return_value = mock_download
+
+        # Patch httpx.post response
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        autodl = AutomatedDL(
+            mock_api,
+            str(tmp_path),
+            extractPath,
+            endedPath,
+            radarr_url="http://localhost:7878",
+            radarr_api_key="test_key",
+        )
+
+        autodl.on_complete_thread(mock_api, "00000000000000AF")
+
+        # Expect moved under movies and Radarr called
+        assert tmp_path.joinpath("Ended", "movies").exists()
+        assert mock_post.call_count == 1
+
+    @patch("httpx.post")
+    def test_archive_nested_media_goes_to_others(
+        self, mock_post: Any, tmp_path: Any
+    ) -> None:
+        """Archive with media in subdirectory should go to others (not detected)."""
+        import shutil
+        from pathlib import Path
+        from . import STATIC_DIR
+
+        extractPath = str(tmp_path.joinpath("Extract"))
+        endedPath = str(tmp_path.joinpath("Ended"))
+
+        # Create mock API
+        mock_api = MagicMock()
+        mock_api.get_downloads.return_value = []
+
+        # Copy pre-made nested.zip from static dir
+        test_zip_source = Path(STATIC_DIR).joinpath("nested.zip")
+        source_zip = tmp_path.joinpath("nested.zip")
+        shutil.copy(str(test_zip_source), str(source_zip))
+
+        # Mock download pointing to the zip
+        mock_download = MagicMock()
+        mock_file = MagicMock()
+        mock_file.path = source_zip
+        mock_download.files = [mock_file]
+        mock_api.get_download.return_value = mock_download
+
+        # Patch httpx.post response
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        autodl = AutomatedDL(
+            mock_api,
+            str(tmp_path),
+            extractPath,
+            endedPath,
+            sonarr_url="http://localhost:8989",
+            sonarr_api_key="test_key",
+            radarr_url="http://localhost:7878",
+            radarr_api_key="test_key",
+        )
+
+        autodl.on_complete_thread(mock_api, "00000000000000B0")
+
+        # Expect moved under others (subdirectory not inspected) and no API calls
+        assert tmp_path.joinpath("Ended", "others").exists()
         assert mock_post.call_count == 0

@@ -83,7 +83,7 @@ def test_txt_dl(tmp_path: Path, caplog: Any) -> None:
     # Call on_complete_thread to process the download
     autodl.on_complete_thread(mock_api, "0000000000000001")
 
-    target = Path(endedPath).joinpath(source.name)
+    target = Path(endedPath).joinpath("others", source.name)
 
     assert not source.exists()
     assert target.exists()
@@ -121,7 +121,7 @@ def test_zip_dl(tmp_path: Path, caplog: Any) -> None:
     autodl.on_complete_thread(mock_api, "0000000000000001")
 
     extract = Path(extractPath)
-    target = Path(endedPath).joinpath(source.name + autodl.outSuffix)
+    target = Path(endedPath).joinpath("others", source.name + autodl.outSuffix)
 
     assert not source.exists()  # origin file is deleted
     assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
@@ -170,7 +170,7 @@ def test_rar_dl(tmp_path: Path, caplog: Any) -> None:
     autodl.on_complete_thread(mock_api, "0000000000000001")
 
     extract = Path(extractPath)
-    target = Path(endedPath).joinpath(source.name + autodl.outSuffix)
+    target = Path(endedPath).joinpath("others", source.name + autodl.outSuffix)
 
     assert not source.exists()  # origin file is deleted
     assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
@@ -263,7 +263,7 @@ def test_multi_dl(tmp_path: Path, caplog: Any) -> None:
         autodl.on_complete_thread(mock_api, gid)
 
     extract = Path(extractPath)
-    target = Path(endedPath).joinpath("multi" + autodl.outSuffix)
+    target = Path(endedPath).joinpath("others", "multi" + autodl.outSuffix)
 
     # All source files should be deleted
     for source in sources:
@@ -329,7 +329,7 @@ def test_missing_dl(tmp_path: Path, caplog: Any) -> None:
         autodl.on_complete_thread(mock_api, gid)
 
     extract = Path(extractPath)
-    target = Path(endedPath).joinpath("multi" + autodl.outSuffix)
+    target = Path(endedPath).joinpath("others", "multi" + autodl.outSuffix)
 
     # When extraction fails, source files remain (not deleted)
     assert sources[0].exists()  # part1 remains
@@ -409,10 +409,10 @@ def test_all_dl(tmp_path: Path, caplog: Any) -> None:
         autodl.on_complete_thread(mock_api, gid)
 
     extract = Path(extractPath)
-    target1 = Path(endedPath).joinpath("multi" + autodl.outSuffix)
-    target5 = Path(endedPath).joinpath("simple.rar" + autodl.outSuffix)
-    target6 = Path(endedPath).joinpath("simple.zip" + autodl.outSuffix)
-    target7 = Path(endedPath).joinpath("100.txt")  # txt file, not extracted
+    target1 = Path(endedPath).joinpath("others", "multi" + autodl.outSuffix)
+    target5 = Path(endedPath).joinpath("others", "simple.rar" + autodl.outSuffix)
+    target6 = Path(endedPath).joinpath("others", "simple.zip" + autodl.outSuffix)
+    target7 = Path(endedPath).joinpath("others", "100.txt")  # txt file, not extracted
 
     # All source files should be deleted
     for gid, (source, is_archive) in sources.items():

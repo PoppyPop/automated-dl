@@ -13,7 +13,8 @@
         "ms-python.python",
         "eamodio.gitlens",
         "esbenp.prettier-vscode",
-        "ms-azuretools.vscode-containers"
+        "ms-azuretools.vscode-containers",
+        "github.vscode-github-actions"
       ]
     }
   }
