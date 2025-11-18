@@ -4,11 +4,17 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-python3 -m pip install --upgrade pip
+# Ensure uv is installed
+if ! command -v uv >/dev/null 2>&1; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+fi
 
-python3 -m pip install --requirement requirements.txt
+# Install dependencies with uv into system interpreter
+uv pip install --system --requirement requirements.txt
 
-python3 -m pip install --requirement requirements-dev.txt
+uv pip install --system --requirement requirements-dev.txt
 
 #python3 -m pip install --requirement .github/workflows/constraints.txt
 
