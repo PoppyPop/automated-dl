@@ -33,7 +33,7 @@ done
 
 sudo apt-get update
 
-sudo apt-get install -y file unrar aria2 p7zip-full unzip jq
+sudo apt-get install -y file unrar aria2 p7zip-full p7zip-rar unzip jq
 
 pre-commit install
 
