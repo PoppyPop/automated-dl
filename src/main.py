@@ -1,7 +1,6 @@
 import aria2p
 import os
 import signal
-import sys
 import logging
 from typing import Optional, Any
 
@@ -74,8 +73,8 @@ autodl: automateddl.AutomatedDL = automateddl.AutomatedDL(
 
 
 def signal_handler(sig: int, frame: Optional[Any]) -> None:
+    logger.info(f"Quitting with signal: {sig}")
     autodl.stop()
-    sys.exit(0)
 
 
 signal.signal(signal.SIGINT, signal_handler)
