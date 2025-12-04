@@ -34,8 +34,6 @@ class AutomatedDL:
 
     __lockbykey: LockByKey = LockByKey()
 
-    # __lock = threading.Lock()
-
     outSuffix: str = "-OUT"
 
     def _detect_media_type(self, path: pathlib.Path) -> tuple[bool, bool]:
@@ -230,11 +228,15 @@ class AutomatedDL:
 
         logger.info(f"{gid} Complete")
 
+        self.__threadlist.pop(gid, None)
+
     def on_complete(self, api: aria2p.API, gid: str) -> None:
         kwargs = {
             "api": api,
             "gid": gid,
         }
+
+        logger.info(f"{gid} Start Thread")
 
         self.__threadlist[gid] = threading.Thread(
             target=self.on_complete_thread, kwargs=kwargs
@@ -453,5 +455,3 @@ class AutomatedDL:
 
         for th in self.__threadlist.values():
             th.join()
-
-        logger.info("Stop thread")

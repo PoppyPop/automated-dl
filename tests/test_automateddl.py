@@ -43,9 +43,10 @@ def test_nfo_dl(tmp_path: Path, caplog: Any) -> None:
 
         wait_for_downloads_complete(server.api)
 
-        autodl.stop()
-
         download = server.api.get_downloads()
+
+        server.terminate()
+        autodl.stop()
 
         source = tmp_path.joinpath("100.nfo")
         target = Path(endedPath).joinpath(source.name)

@@ -25,11 +25,12 @@ jobs:
           python-version: "3.x"
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install flake8 pytest
-          sudo apt-get install unrar aria2
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          uv pip install --system flake8 pytest
+          sudo apt-get update && sudo apt-get install -y unrar aria2
+          if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then uv pip install --system -r requirements-dev.txt; fi
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
@@ -66,6 +67,9 @@ jobs:
           # Remove leading 'v' if present for numeric tags
           BASE_TAG=${TAG_NAME#v}
 
+          # Export BASE_TAG for build args
+          echo "BASE_TAG=${BASE_TAG}" >> $GITHUB_ENV
+
           # Check if tag matches semver pattern (X.Y.Z)
           if [[ "$BASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             SEMVER_VALID=true
@@ -82,10 +86,11 @@ jobs:
             MAJOR_MINOR="$MAJOR"
           fi
 
-          # Build tags - include latest only if semver is valid
+          # Build tags - full version without 'v', major and minor with 'v'
+          # Include latest only if semver is valid
           if [ "$SEMVER_VALID" = true ]; then
-            echo "DOCKER_TAGS=${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${TAG_NAME},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${MAJOR_MINOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest" >> $GITHUB_ENV
-            echo "GHCR_TAGS=ghcr.io/${{ env.OWNER_LC }}/automated-dl:${TAG_NAME},ghcr.io/${{ env.OWNER_LC }}/automated-dl:${MAJOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:${MAJOR_MINOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:latest" >> $GITHUB_ENV
+            echo "DOCKER_TAGS=${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${BASE_TAG},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:v${MAJOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:v${MAJOR_MINOR},${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:latest" >> $GITHUB_ENV
+            echo "GHCR_TAGS=ghcr.io/${{ env.OWNER_LC }}/automated-dl:${BASE_TAG},ghcr.io/${{ env.OWNER_LC }}/automated-dl:v${MAJOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:v${MAJOR_MINOR},ghcr.io/${{ env.OWNER_LC }}/automated-dl:latest" >> $GITHUB_ENV
           else
             echo "DOCKER_TAGS=${{ secrets.DOCKERHUB_USERNAME }}/automated-dl:${TAG_NAME}" >> $GITHUB_ENV
             echo "GHCR_TAGS=ghcr.io/${{ env.OWNER_LC }}/automated-dl:${TAG_NAME}" >> $GITHUB_ENV
@@ -97,6 +102,8 @@ jobs:
         with:
           push: true
           tags: ${{ env.DOCKER_TAGS }}
+          build-args: |
+            VERSION=${{ env.BASE_TAG }}
 
       - name: Build and push to GHCR
         id: docker_build_ghcr
@@ -104,6 +111,8 @@ jobs:
         with:
           push: true
           tags: ${{ env.GHCR_TAGS }}
+          build-args: |
+            VERSION=${{ env.BASE_TAG }}
 
       - name: DockerHub Image digest
         run: echo ${{ steps.docker_build_dockerhub.outputs.digest }}

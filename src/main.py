@@ -1,8 +1,8 @@
 import aria2p
 import os
 import signal
-import sys
 import logging
+import threading
 from typing import Optional, Any
 
 import automateddl
@@ -29,6 +29,9 @@ logging.basicConfig(
     datefmt="%Y/%m/%dT%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+# Log version
+logger.info(f"AutomatedDL version: {automateddl.__version__}")
 
 # Get Config fom environnement
 
@@ -69,12 +72,18 @@ autodl: automateddl.AutomatedDL = automateddl.AutomatedDL(
     radarr_api_key=radarr_api_key,
 )
 
+__stop_event: threading.Event = threading.Event()
+
 
 def signal_handler(sig: int, frame: Optional[Any]) -> None:
+    logger.info(f"Quitting with signal: {sig}")
     autodl.stop()
-    sys.exit(0)
+    __stop_event.set()
 
 
 signal.signal(signal.SIGINT, signal_handler)
 
+__stop_event.clear()
+
 autodl.start()
+__stop_event.wait()
