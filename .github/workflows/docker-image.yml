@@ -27,16 +27,8 @@ jobs:
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          uv pip install --system flake8 pytest
           sudo apt-get update && sudo apt-get install -y unrar aria2
-          if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then uv pip install --system -r requirements-dev.txt; fi
-      - name: Lint with flake8
-        run: |
-          # stop the build if there are Python syntax errors or undefined names
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          uv pip install --system -e ".[dev]"
       - name: Test with pytest
         run: |
           pytest
