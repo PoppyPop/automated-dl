@@ -1,39 +1,33 @@
-import aria2p
+import logging
 import os
 import signal
-import logging
+import sys
 import threading
-from typing import Optional, Any
+from typing import Any
+
+import aria2p
 
 import automateddl
 
 # Configure logging
 # Allow overriding log level with environment variable `LOG_LEVEL`.
-# Accepts level names like DEBUG, INFO, WARNING, ERROR, CRITICAL or
-# numeric levels (e.g. 10, 20).
-level_env = os.getenv("LOG_LEVEL", "INFO")
-try:
-    if str(level_env).isdigit():
-        level: int = int(level_env)
-    else:
-        level = getattr(logging, str(level_env).upper(), logging.INFO)
-        if not isinstance(level, int):
-            # Fallback to INFO if the provided name isn't valid
-            level = logging.INFO
-except Exception:
-    level = logging.INFO
+# Accepts level names like DEBUG, INFO, WARNING, ERROR, CRITICAL.
+level_env = os.getenv("LOG_LEVEL", "INFO").upper()
 
+# Create logger with format similar to loguru
 logging.basicConfig(
-    level=level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y/%m/%dT%H:%M:%S",
+    level=getattr(logging, level_env, logging.INFO),
+    format="%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    stream=sys.stderr,
 )
 logger = logging.getLogger(__name__)
 
 # Log version
 logger.info(f"AutomatedDL version: {automateddl.__version__}")
 
-# Get Config fom environnement
+# Get Config from environment
+
 
 server: str = os.getenv("SERVER", "http://127.0.0.1")
 port: int = int(os.getenv("PORT", "6800"))
@@ -75,7 +69,7 @@ autodl: automateddl.AutomatedDL = automateddl.AutomatedDL(
 __stop_event: threading.Event = threading.Event()
 
 
-def signal_handler(sig: int, frame: Optional[Any]) -> None:
+def signal_handler(sig: int, frame: Any | None) -> None:
     logger.info(f"Quitting with signal: {sig}")
     autodl.stop()
     __stop_event.set()

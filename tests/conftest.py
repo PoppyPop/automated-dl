@@ -1,54 +1,18 @@
 """Configuration for the pytest test suite."""
 
-import os
+import logging
 import subprocess
 import sys
 import time
-import logging
+from collections.abc import Generator
 from pathlib import Path
-from typing import Optional, Any, Generator
+from typing import Any
 
 import pytest
 import requests
-
 from aria2p import API, Client, enable_logger
 
 from . import CONFIGS_DIR, SESSIONS_DIR
-
-
-@pytest.fixture(autouse=True)
-def setup_logging() -> Generator[None, None, None]:
-    """Configure logging for tests."""
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-    yield
-    # Reset logging after each test
-
-
-@pytest.fixture(autouse=True)
-def tests_logs(request: pytest.FixtureRequest) -> None:
-    # put logs in tests/logs
-    log_path = Path("tests") / "logs"
-
-    # tidy logs in subdirectories based on test module and class names
-    module = request.module
-    class_ = request.cls
-    name = request.node.name + ".log"
-
-    if module:
-        log_path /= module.__name__.replace("tests.", "")
-    if class_:
-        log_path /= class_.__name__
-
-    log_path.mkdir(parents=True, exist_ok=True)
-
-    # append last part of the name and enable logger
-    log_path /= name
-    if log_path.exists():
-        log_path.unlink()
-    enable_logger(sink=log_path, level=os.environ.get("PYTEST_LOG_LEVEL", "TRACE"))
 
 
 def spawn_and_wait_server(port: int = 8779) -> subprocess.Popen[bytes]:
@@ -77,7 +41,7 @@ def spawn_and_wait_server(port: int = 8779) -> subprocess.Popen[bytes]:
 @pytest.fixture(scope="session", autouse=True)
 def http_server(
     tmp_path_factory: pytest.TempPathFactory, worker_id: Any
-) -> Generator[Optional[subprocess.Popen[bytes]], None, None]:
+) -> Generator[subprocess.Popen[bytes] | None, None, None]:
     if worker_id == "master":
         # single worker: just run the HTTP server
         process = spawn_and_wait_server()
@@ -104,13 +68,59 @@ def http_server(
     process.wait()
 
 
+@pytest.fixture(autouse=True)
+def tests_logs(request: pytest.FixtureRequest) -> Generator[None, None, None]:
+    """Capture all logs to organized test files."""
+    # Create logs directory structure: logs/test_file/test_name.log
+    log_base = Path("tests/logs")
+    log_base.mkdir(exist_ok=True)
+
+    # Get test module name
+    module_name = (
+        request.module.__name__.split(".")[-1] if request.module else "unknown"
+    )
+    test_dir = log_base / module_name
+    test_dir.mkdir(exist_ok=True)
+
+    # Get test name
+    test_name = request.node.name
+    log_file = test_dir / f"{test_name}.log"
+
+    # Remove log file if it already exists
+    if log_file.exists():
+        log_file.unlink()
+
+    # Set up aria2p logging (aria2p uses loguru internally)
+    enable_logger(sink=str(log_file), level="TRACE")
+
+    # Set up standard logging for application logs
+    file_handler = logging.FileHandler(log_file, mode="a")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(
+        logging.Formatter(
+            fmt="%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+
+    # Add handler to root logger
+    logging.root.addHandler(file_handler)
+    logging.root.setLevel(logging.DEBUG)
+
+    yield
+
+    # Clean up handler
+    logging.root.removeHandler(file_handler)
+    file_handler.close()
+
+
 class _Aria2Server:
     def __init__(
         self,
         tmp_dir: Path,
         port: int,
-        config: Optional[Path] = None,
-        session: Optional[Any] = None,
+        config: Path | None = None,
+        session: Any | None = None,
         secret: str = "",
     ) -> None:
         self.tmp_dir = tmp_dir
@@ -146,7 +156,7 @@ class _Aria2Server:
             command.append(f"--rpc-secret={secret}")
 
         self.command = command
-        self.process: Optional[subprocess.Popen[bytes]] = None
+        self.process: subprocess.Popen[bytes] | None = None
 
         # create the client with port
         self.client = Client(port=self.port, secret=secret, timeout=20)
@@ -192,7 +202,7 @@ class _Aria2Server:
             self.process.kill()
             self.wait()
 
-    def rmdir(self, directory: Optional[Path] = None) -> None:
+    def rmdir(self, directory: Path | None = None) -> None:
         if directory is None:
             directory = self.tmp_dir
         for item in directory.iterdir():
@@ -215,8 +225,8 @@ class Aria2Server:
         self,
         tmp_dir: Path,
         port: int,
-        config: Optional[Path] = None,
-        session: Optional[Any] = None,
+        config: Path | None = None,
+        session: Any | None = None,
         secret: str = "",
     ) -> None:
         self.server = _Aria2Server(tmp_dir, port, config, session, secret)

@@ -11,10 +11,8 @@ if ! command -v uv >/dev/null 2>&1; then
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
-# Install dependencies with uv into system interpreter
-uv pip install --system --requirement requirements.txt
-
-uv pip install --system --requirement requirements-dev.txt
+# Install dependencies with uv from pyproject.toml (including dev dependencies)
+uv pip install --system -e ".[dev]"
 
 #python3 -m pip install --requirement .github/workflows/constraints.txt
 

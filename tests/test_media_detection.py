@@ -1,8 +1,8 @@
 """Tests for media detection and Sonarr/Radarr API functionality."""
 
 import pathlib
-from unittest.mock import Mock, patch, MagicMock
 from typing import Any
+from unittest.mock import MagicMock, Mock, patch
 
 from src.automateddl import AutomatedDL
 
@@ -411,6 +411,7 @@ class TestIntegration:
         """Zipped episode should extract, move under series, and trigger Sonarr."""
         import shutil
         from pathlib import Path
+
         from . import STATIC_DIR
 
         extractPath = str(tmp_path.joinpath("Extract"))
@@ -464,6 +465,7 @@ class TestIntegration:
         """Zipped movie should extract, move under movies, and trigger Radarr."""
         import shutil
         from pathlib import Path
+
         from . import STATIC_DIR
 
         extractPath = str(tmp_path.joinpath("Extract"))
@@ -519,6 +521,7 @@ class TestIntegration:
         """Archive with media in subdirectory should go to others (not detected)."""
         import shutil
         from pathlib import Path
+
         from . import STATIC_DIR
 
         extractPath = str(tmp_path.joinpath("Extract"))

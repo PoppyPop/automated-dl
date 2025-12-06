@@ -1,8 +1,0 @@
-uvicorn
-pytest-xdist
-pytest-cov
-fastapi
-aiofiles
-pre-commit
-ruff
-mypy

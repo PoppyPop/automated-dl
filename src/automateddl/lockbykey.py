@@ -1,9 +1,8 @@
 import threading
-from typing import Dict
 
 
 class LockByKey:
-    __locks: Dict[str, threading.Lock] = dict()
+    __locks: dict[str, threading.Lock] = {}
     __selfLock: threading.Lock = threading.Lock()
 
     def getlock(self, key: str) -> threading.Lock:

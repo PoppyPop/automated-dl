@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+from src.automateddl import AutomatedDL
+
 from . import STATIC_DIR
 from .conftest import Aria2Server
-
-from src.automateddl import AutomatedDL
 
 
 def wait_for_downloads_complete(
@@ -41,12 +41,12 @@ def test_nfo_dl(tmp_path: Path, caplog: Any) -> None:
 
         server.api.resume_all()
 
-        wait_for_downloads_complete(server.api)
+        assert wait_for_downloads_complete(server.api, timeout=30.0)
 
         download = server.api.get_downloads()
 
-        server.terminate()
         autodl.stop()
+        server.terminate()
 
         source = tmp_path.joinpath("100.nfo")
         target = Path(endedPath).joinpath(source.name)
@@ -125,7 +125,7 @@ def test_zip_dl(tmp_path: Path, caplog: Any) -> None:
     target = Path(endedPath).joinpath("others", source.name + autodl.outSuffix)
 
     assert not source.exists()  # origin file is deleted
-    assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
+    assert len(list(extract.iterdir())) == 0  # extract dir is empty
     assert target.exists() and target.is_dir()  # target dir exist
 
     destFileName = "simple.txt"
@@ -174,7 +174,7 @@ def test_rar_dl(tmp_path: Path, caplog: Any) -> None:
     target = Path(endedPath).joinpath("others", source.name + autodl.outSuffix)
 
     assert not source.exists()  # origin file is deleted
-    assert len([path for path in extract.iterdir()]) == 0  # extract dir is empty
+    assert len(list(extract.iterdir())) == 0  # extract dir is empty
     assert target.exists() and target.is_dir()  # target dir exist
 
     destFileName = "simple.txt"
@@ -217,7 +217,7 @@ def test_multi_dl(tmp_path: Path, caplog: Any) -> None:
         sources.append(source)
 
     # Create mock download objects for each part
-    for gid, source in zip(
+    for _, source in zip(
         [
             "0000000000000001",
             "0000000000000002",
@@ -225,6 +225,7 @@ def test_multi_dl(tmp_path: Path, caplog: Any) -> None:
             "0000000000000004",
         ],
         sources,
+        strict=False,
     ):
         mock_download = MagicMock()
         mock_file = MagicMock()
@@ -241,6 +242,7 @@ def test_multi_dl(tmp_path: Path, caplog: Any) -> None:
                     "0000000000000004",
                 ],
                 sources,
+                strict=False,
             ):
                 if gid_arg == gid_val:
                     mock_dl = MagicMock()
@@ -271,7 +273,7 @@ def test_multi_dl(tmp_path: Path, caplog: Any) -> None:
         assert not source.exists()
 
     # Extract dir should be empty
-    assert len([path for path in extract.iterdir()]) == 0
+    assert len(list(extract.iterdir())) == 0
     # Target dir should exist
     assert target.exists() and target.is_dir()
 
@@ -312,7 +314,7 @@ def test_missing_dl(tmp_path: Path, caplog: Any) -> None:
     gids = ["0000000000000001", "0000000000000003"]
 
     def get_download_side_effect(gid_arg):
-        for gid_val, src in zip(gids, sources):
+        for gid_val, src in zip(gids, sources, strict=False):
             if gid_arg == gid_val:
                 mock_dl = MagicMock()
                 mock_fl = MagicMock()
@@ -338,7 +340,7 @@ def test_missing_dl(tmp_path: Path, caplog: Any) -> None:
 
     # When extraction fails due to missing parts, files end up in extract dir
     assert (
-        len([path for path in extract.iterdir()]) == 1
+        len(list(extract.iterdir())) == 1
     )  # extract dir has the failed extraction dir
     assert extract.joinpath("multi" + autodl.outSuffix).exists()
 
@@ -416,11 +418,11 @@ def test_all_dl(tmp_path: Path, caplog: Any) -> None:
     target7 = Path(endedPath).joinpath("others", "100.txt")  # txt file, not extracted
 
     # All source files should be deleted
-    for gid, (source, is_archive) in sources.items():
+    for _, (source, _) in sources.items():
         assert not source.exists(), f"Source {source.name} still exists"
 
     # Extract dir should be empty
-    assert len([path for path in extract.iterdir()]) == 0
+    assert len(list(extract.iterdir())) == 0
 
     # All archive targets should exist and be directories
     assert target1.exists() and target1.is_dir()
@@ -448,3 +450,102 @@ def test_all_dl(tmp_path: Path, caplog: Any) -> None:
             assert source_contents.rstrip() == target_contents.rstrip()
 
     assert len(mock_api.get_downloads()) == 0
+
+
+def test_websocket_failure(tmp_path: Path, caplog: Any) -> None:
+    """Test that AutomatedDL handles websocket connection failures with retry logic."""
+    import time
+
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Create a mock listener that fails
+    mock_listener = MagicMock()
+    mock_listener.is_alive.return_value = False
+    mock_api.listener = mock_listener
+
+    # Make listen_to_notifications raise an exception to simulate connection failure
+    connection_error = Exception("Connection refused")
+    mock_api.listen_to_notifications.side_effect = connection_error
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Start should not block and should handle the failure
+    autodl.start()
+
+    # Give it time to attempt connection and retry
+    time.sleep(2)
+
+    # Stop the autodl instance
+    autodl.stop()
+
+    # Verify that connection attempts were logged
+    assert "Attempting to connect to aria2" in caplog.text
+    assert "Error in listener monitor" in caplog.text
+    assert "Retrying in" in caplog.text or "Max retries reached" in caplog.text
+
+    # Verify stop was called
+    assert "Stop listening" in caplog.text
+    assert "Stop complete" in caplog.text
+
+
+def test_websocket_reconnection(tmp_path: Path, caplog: Any) -> None:
+    """Test that AutomatedDL successfully reconnects after temporary websocket failure."""
+    import time
+
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Create a mock listener that starts as dead, then becomes alive
+    mock_listener = MagicMock()
+    call_count = {"listen": 0, "is_alive": 0}
+
+    def listen_side_effect(*args, **kwargs):
+        call_count["listen"] += 1
+        if call_count["listen"] == 1:
+            # First call fails
+            raise Exception("Connection failed")
+        # Second call succeeds
+        mock_api.listener = mock_listener
+
+    def is_alive_side_effect():
+        call_count["is_alive"] += 1
+        # Stay alive for a few checks, then die to trigger retry
+        if call_count["listen"] == 1:
+            return False  # First connection attempt failed
+        if call_count["is_alive"] < 3:
+            return True  # Second connection is stable for a bit
+        return False  # Then dies to end the test
+
+    mock_listener.is_alive.side_effect = is_alive_side_effect
+    mock_api.listen_to_notifications.side_effect = listen_side_effect
+    mock_api.listener = None
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Start should not block
+    autodl.start()
+
+    # Give it time to attempt connection, fail, retry, and reconnect
+    time.sleep(3)
+
+    # Stop the autodl instance
+    autodl.stop()
+
+    # Verify that multiple connection attempts were made
+    assert caplog.text.count("Attempting to connect to aria2") >= 2
+    assert "Retrying in" in caplog.text
+
+    # Verify stop was called
+    assert "Stop listening" in caplog.text
+    assert "Stop complete" in caplog.text
