@@ -1,10 +1,10 @@
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
-from fastapi.responses import FileResponse
-# from fastapi.staticfiles import StaticFiles
-
-from . import STATIC_DIR
 import os
+
+from fastapi import FastAPI
+from fastapi.responses import FileResponse, StreamingResponse
+
+# from fastapi.staticfiles import StaticFiles
+from . import STATIC_DIR
 
 
 def translate_size(size):

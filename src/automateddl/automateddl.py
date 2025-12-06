@@ -1,14 +1,14 @@
-import aria2p
+import logging
 import os
 import pathlib
-import patoolib
-import shutil
 import re
-import logging
+import shutil
 import threading
-import httpx
-from typing import Dict, List
 from enum import Enum
+
+import aria2p
+import httpx
+import patoolib
 
 from .lockbykey import LockByKey
 
@@ -30,9 +30,12 @@ class AutomatedDL:
     __endedpath: str
     __downpath: str
 
-    __threadlist: Dict[str, threading.Thread] = {}
+    __threadlist: dict[str, threading.Thread] = {}
 
     __lockbykey: LockByKey = LockByKey()
+
+    __listener_monitor_thread: threading.Thread | None = None
+    __stop_event: threading.Event = threading.Event()
 
     outSuffix: str = "-OUT"
 
@@ -163,7 +166,7 @@ class AutomatedDL:
     def HandleMultiPart(
         self, gid: str, api: aria2p.API, path: pathlib.Path, ext: str
     ) -> None:
-        multipartRegEx: List[str] = [r"^(?P<filename>.+)\.part(?P<number>\d+)\."]
+        multipartRegEx: list[str] = [r"^(?P<filename>.+)\.part(?P<number>\d+)\."]
         doExtract: bool = False
         isMatched: bool = False
         filename: str = path.name
@@ -199,7 +202,7 @@ class AutomatedDL:
     ) -> None:
         path = pathlib.Path(os.path.join(self.__downpath, path.name))
 
-        archiveExt: List[str] = [".zip", ".rar"]
+        archiveExt: list[str] = [".zip", ".rar"]
 
         _, file_extension = os.path.splitext(path)
         if file_extension == ".nfo":
@@ -444,14 +447,88 @@ class AutomatedDL:
             logger.error(f"Error triggering Radarr scan: {str(e)}")
 
     def start(self) -> None:
-        self.__api.listen_to_notifications(
-            threaded=True, on_download_complete=self.on_complete
+        # catchup on missed downloads while offline
+        downloads = self.__api.get_downloads()
+        for dl in downloads:
+            if dl.is_complete:
+                logger.info(f"Catchup {dl.gid}")
+                self.on_complete(self.__api, dl.gid)
+
+        # Start the listener monitor in a background thread (non-blocking)
+        self.__stop_event.clear()
+        self.__listener_monitor_thread = threading.Thread(
+            target=self._monitor_listener_with_retry, daemon=True
         )
-        logger.info("Starting listening")
+        self.__listener_monitor_thread.start()
+        logger.info("Listener monitor started (non-blocking)")
+
+    def _monitor_listener_with_retry(self, max_retries: int = 5) -> None:
+        """Monitor and restart the listener with automatic retry on connection failures."""
+        import time
+
+        retry_count = 0
+        backoff_seconds = 1
+
+        while not self.__stop_event.is_set() and retry_count < max_retries:
+            try:
+                logger.info(
+                    f"Attempting to connect to aria2 (attempt {retry_count + 1}/{max_retries})"
+                )
+                self.__api.listen_to_notifications(
+                    threaded=True, on_download_complete=self.on_complete
+                )
+                logger.info("Listener connected successfully")
+
+                # Monitor the listener thread until it dies or stop is called
+                while not self.__stop_event.is_set():
+                    if not (self.__api.listener and self.__api.listener.is_alive()):
+                        logger.warning("Listener thread stopped unexpectedly")
+                        break
+                    time.sleep(1)
+
+                # If stop was called, exit cleanly
+                if self.__stop_event.is_set():
+                    logger.info("Stop requested, exiting listener monitor")
+                    break
+
+                # Listener died unexpectedly, reset retry count and try again
+                if retry_count < max_retries - 1:
+                    logger.info(f"Retrying in {backoff_seconds} seconds...")
+                    if self.__stop_event.wait(backoff_seconds):
+                        # Stop was requested during wait
+                        break
+                    backoff_seconds = min(backoff_seconds * 2, 60)
+                    retry_count += 1
+                else:
+                    logger.error("Max retries reached, giving up")
+                    break
+
+            except Exception as e:
+                logger.error(f"Error in listener monitor: {e}", exc_info=True)
+                if retry_count < max_retries - 1:
+                    logger.info(f"Retrying in {backoff_seconds} seconds...")
+                    if self.__stop_event.wait(backoff_seconds):
+                        break
+                    backoff_seconds = min(backoff_seconds * 2, 60)
+                    retry_count += 1
+                else:
+                    logger.error("Max retries reached, giving up")
+                    break
 
     def stop(self) -> None:
+        # Signal the monitor thread to stop
+        self.__stop_event.set()
+
+        # Stop the aria2 listener
         self.__api.stop_listening()
         logger.info("Stop listening")
 
+        # Wait for any active download handlers to finish
         for th in self.__threadlist.values():
             th.join()
+
+        # Wait for the monitor thread to finish
+        if self.__listener_monitor_thread and self.__listener_monitor_thread.is_alive():
+            self.__listener_monitor_thread.join(timeout=5)
+
+        logger.info("Stop complete")
