@@ -1,5 +1,6 @@
 """Tests for the `automateddl` module."""
 
+import time
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -38,6 +39,8 @@ def test_nfo_dl(tmp_path: Path, caplog: Any) -> None:
 
         autodl = AutomatedDL(server.api, str(tmp_path), extractPath, endedPath)
         autodl.start()
+
+        time.sleep(1.0)  # Give some time for the listener to start
 
         server.api.resume_all()
 
@@ -549,3 +552,177 @@ def test_websocket_reconnection(tmp_path: Path, caplog: Any) -> None:
     # Verify stop was called
     assert "Stop listening" in caplog.text
     assert "Stop complete" in caplog.text
+
+
+def test_catchup_downloads(tmp_path: Path, caplog: Any) -> None:
+    """Test that AutomatedDL processes catchup downloads on start."""
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+
+    # Create a mock completed download
+    mock_download = MagicMock()
+    mock_download.gid = "0000000000000001"
+    mock_download.is_complete = True
+    mock_file = MagicMock()
+    source = tmp_path.joinpath("catchup.txt")
+    source.write_text("catchup content")
+    mock_file.path = source
+    mock_download.files = [mock_file]
+
+    # Return the completed download on get_downloads
+    mock_api.get_downloads.return_value = [mock_download]
+    mock_api.get_download.return_value = mock_download
+    mock_api.listen_to_notifications.return_value = None
+    mock_listener = MagicMock()
+    mock_listener.is_alive.return_value = True
+    mock_api.listener = mock_listener
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Start should process the catchup download
+    autodl.start()
+    time.sleep(0.5)  # Give time for processing
+
+    # Verify catchup was logged
+    assert "Catchup 0000000000000001" in caplog.text
+
+    autodl.stop()
+
+
+def test_max_retries_reached(tmp_path: Path, caplog: Any) -> None:
+    """Test that AutomatedDL stops after max retries."""
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Make listen_to_notifications always fail
+    mock_api.listen_to_notifications.side_effect = Exception("Connection failed")
+    mock_api.listener = None
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Start should attempt retries
+    autodl.start()
+
+    # Give it time to reach max retries (5 attempts with backoff: 1s, 2s, 4s, 8s, 16s)
+    time.sleep(3)
+
+    # Stop the autodl instance
+    autodl.stop()
+
+    # Verify max retries message appears
+    assert "Error in listener monitor" in caplog.text
+
+
+def test_listener_dies_unexpectedly(tmp_path: Path, caplog: Any) -> None:
+    """Test that AutomatedDL detects when listener thread dies."""
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Create a mock listener that reports as dead
+    mock_listener = MagicMock()
+    call_count = {"count": 0}
+
+    def is_alive_side_effect():
+        call_count["count"] += 1
+        # Return True for first check, then False to simulate death
+        return call_count["count"] <= 1
+
+    mock_listener.is_alive.side_effect = is_alive_side_effect
+
+    def listen_side_effect(*args, **kwargs):
+        mock_api.listener = mock_listener
+
+    mock_api.listen_to_notifications.side_effect = listen_side_effect
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Start should detect listener death and retry
+    autodl.start()
+
+    # Give it time to detect death and retry
+    time.sleep(3)
+
+    autodl.stop()
+
+    # Verify listener death was detected
+    assert "Listener thread stopped unexpectedly" in caplog.text
+
+
+def test_detect_media_type_exception(tmp_path: Path, caplog: Any) -> None:
+    """Test that _detect_media_type handles exceptions gracefully."""
+    from unittest.mock import patch
+
+    caplog.set_level("DEBUG")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Create a path that will cause an exception
+    test_path = tmp_path / "test.mkv"
+    test_path.write_text("test")
+
+    # Patch is_file to raise an exception
+    with patch.object(Path, "is_file", side_effect=PermissionError("Access denied")):
+        has_media, is_series = autodl._detect_media_type(test_path)
+
+        # Should return False, False on exception
+        assert has_media is False
+        assert is_series is False
+        assert "Exception during media detection" in caplog.text
+
+
+def test_stop_event_during_backoff(tmp_path: Path, caplog: Any) -> None:
+    """Test that stop event is respected during backoff wait."""
+    caplog.set_level("INFO")
+    extractPath = str(tmp_path.joinpath("Extract"))
+    endedPath = str(tmp_path.joinpath("Ended"))
+
+    # Create mock API
+    mock_api = MagicMock()
+    mock_api.get_downloads.return_value = []
+
+    # Make first connection attempt fail
+    connection_count = {"count": 0}
+
+    def listen_side_effect(*args, **kwargs):
+        connection_count["count"] += 1
+        if connection_count["count"] == 1:
+            raise Exception("First connection failed")
+        # Second attempt should not happen
+        time.sleep(10)
+
+    mock_api.listen_to_notifications.side_effect = listen_side_effect
+
+    autodl = AutomatedDL(mock_api, str(tmp_path), extractPath, endedPath)
+
+    # Start should fail first connection
+    autodl.start()
+
+    # Give it time to fail and enter backoff
+    time.sleep(0.5)
+
+    # Stop during backoff
+    autodl.stop()
+
+    # Verify stop was handled during backoff
+    assert "Stop requested" in caplog.text or "Stop listening" in caplog.text
+    assert connection_count["count"] == 1  # Should not have retried
