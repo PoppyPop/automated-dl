@@ -28,14 +28,17 @@ RUN curl -LsSf https://api.github.com/repos/EDM115/unrar-alpine/releases/latest 
 RUN apk add --no-cache libstdc++ libgcc
 
 # Install uv and Python requirements
-ADD requirements.txt .
+WORKDIR /app
+
 # Install uv (fast Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && uv --version \
-    && uv pip install --system -r requirements.txt
+    && uv sync
 
-WORKDIR /app
 ADD src /app
+
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Update version in __init__.py
 RUN sed -i "s/__version__ = \".*\"/__version__ = \"${VERSION}\"/" /app/automateddl/__init__.py
