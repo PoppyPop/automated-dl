@@ -5,16 +5,10 @@ set -e
 cd "$(dirname "$0")/.."
 
 # Ensure uv is installed
-if ! command -v uv >/dev/null 2>&1; then
-    echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.local/bin:$PATH"
-fi
+pip install --upgrade uv
 
 # Install dependencies with uv from pyproject.toml (including dev dependencies)
-uv pip install --system -e ".[dev]"
-
-#python3 -m pip install --requirement .github/workflows/constraints.txt
+uv sync --all-extras
 
 # Activate non-free and contrib components in APT sources
 FILES="/etc/apt/sources.list.d/*.sources /etc/apt/sources.sources"
@@ -33,6 +27,6 @@ sudo apt-get update
 
 sudo apt-get install -y file unrar aria2 p7zip-full p7zip-rar unzip jq
 
-pre-commit install
+uv run pre-commit install
 
-code --uninstall-extension ms-python.autopep8
+# code --uninstall-extension ms-python.autopep8
