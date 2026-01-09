@@ -142,5 +142,3 @@ cython_debug/
 .ports.json
 
 .env
-
-uv.lock
